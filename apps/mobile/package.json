@@ -1,0 +1,31 @@
+{
+  "name": "@ghost/mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "build:android": "eas build --platform android",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@ghost/shared-types": "workspace:*",
+    "expo": "~50.0.0",
+    "expo-router": "~3.4.0",
+    "react": "18.2.0",
+    "react-native": "0.73.0",
+    "expo-secure-store": "~12.8.0",
+    "@solana-mobile/mobile-wallet-adapter-protocol": "^2.0.0",
+    "@solana/web3.js": "^1.87.0",
+    "zustand": "^4.4.0",
+    "axios": "^1.6.0",
+    "@tanstack/react-query": "^5.0.0",
+    "socket.io-client": "^4.6.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@types/react": "~18.2.0",
+    "typescript": "^5.3.0"
+  }
+}

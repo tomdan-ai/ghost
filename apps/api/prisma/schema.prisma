@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique
+  username      String   @unique
+  createdAt     DateTime @default(now())
+  
+  sentPayments     PaymentRequest[] @relation("SentPayments")
+  receivedPayments PaymentRequest[] @relation("ReceivedPayments")
+  usernameRegistry UsernameRegistry?
+}
+
+model UsernameRegistry {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  walletAddress String   @unique
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model PaymentRequest {
+  id               String   @id @default(cuid())
+  senderWallet     String
+  receiverWallet   String
+  amount           String
+  sourceChain      String
+  destinationChain String
+  status           String
+  txHash           String?
+  createdAt        DateTime @default(now())
+  
+  sender       User          @relation("SentPayments", fields: [senderWallet], references: [walletAddress])
+  receiver     User          @relation("ReceivedPayments", fields: [receiverWallet], references: [walletAddress])
+  transactions Transaction[]
+}
+
+model Transaction {
+  id               String   @id @default(cuid())
+  paymentRequestId String
+  sourceTx         String?
+  destinationTx    String?
+  status           String
+  createdAt        DateTime @default(now())
+  
+  paymentRequest PaymentRequest @relation(fields: [paymentRequestId], references: [id])
+}
