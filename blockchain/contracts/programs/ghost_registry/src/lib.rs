@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("5v95TCKx8XvdXKnGjFQUumdNwdAuM6prvcYx6YfZxBKH");
 
 #[program]
 pub mod ghost_registry {
