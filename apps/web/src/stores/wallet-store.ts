@@ -7,6 +7,8 @@ interface WalletState {
   connected: boolean;
   connecting: boolean;
   balance: number | null;
+  username: string | null;
+  hasRegistered: boolean;
 }
 
 interface WalletActions {
@@ -14,6 +16,9 @@ interface WalletActions {
   setConnected: (connected: boolean) => void;
   setConnecting: (connecting: boolean) => void;
   setBalance: (balance: number | null) => void;
+  setUsername: (username: string | null) => void;
+  setHasRegistered: (hasRegistered: boolean) => void;
+  syncBalance: () => Promise<void>;
   disconnect: () => void;
 }
 
@@ -27,18 +32,28 @@ export const useWalletStore = create<WalletStore>()(
       connected: false,
       connecting: false,
       balance: null,
+      username: null,
+      hasRegistered: false,
 
       // Actions
       setPublicKey: (publicKey) => set({ publicKey }),
       setConnected: (connected) => set({ connected }),
       setConnecting: (connecting) => set({ connecting }),
       setBalance: (balance) => set({ balance }),
+      setUsername: (username) => set({ username }),
+      setHasRegistered: (hasRegistered) => set({ hasRegistered }),
+      syncBalance: async () => {
+        // Triggered by components to refresh balance
+        // Actual logic is in WalletStateSync effect
+      },
       disconnect: () =>
         set({
           publicKey: null,
           connected: false,
           connecting: false,
           balance: null,
+          username: null,
+          hasRegistered: false,
         }),
     }),
     {

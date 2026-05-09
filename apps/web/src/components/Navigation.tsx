@@ -1,27 +1,19 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { LogIn, LogOut } from 'lucide-react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useWalletStore } from '@/stores/wallet-store';
+import { LogOut } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
 export function Navigation() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { connected, disconnect: disconnectWallet } = useWallet();
+  const { username } = useWalletStore();
   const pathname = usePathname();
 
-  const handleGoogleLogin = () => {
-    setIsLoggingIn(true);
-    // Simulate ZK login / passwordless auth delay
-    setTimeout(() => {
-      setIsAuthenticated(true);
-      setIsLoggingIn(false);
-    }, 1500);
-  };
-
   const handleLogout = () => {
-    setIsAuthenticated(false);
+    disconnectWallet();
   };
 
   return (
@@ -31,7 +23,7 @@ export function Navigation() {
           <Link href="/" className="text-base font-bold text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)]">
             Ghost Server
           </Link>
-          {isAuthenticated && (
+          {connected && (
             <Link href="/dashboard" className={`text-sm hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)] ${pathname === '/dashboard' ? 'text-text-inverse font-medium' : 'text-text-secondary'}`}>
               Dashboard
             </Link>
@@ -39,29 +31,22 @@ export function Navigation() {
         </div>
 
         <div className="flex items-center gap-4">
-          {!isAuthenticated ? (
-            <Button
-              onClick={handleGoogleLogin}
-              disabled={isLoggingIn}
-              className="rounded-xs border border-border bg-text-inverse text-surface-base hover:bg-surface-base hover:text-text-inverse transition-colors"
-            >
-              <LogIn className="mr-2 h-4 w-4" />
-              {isLoggingIn ? 'Authenticating...' : 'Sign in with Google'}
-            </Button>
+          {!connected ? (
+            <WalletMultiButton className="!bg-text-inverse !text-surface-base !rounded-xs !h-10 !px-6 !font-bold !text-sm hover:!opacity-90 transition-all border border-border" />
           ) : (
             <div className="flex items-center gap-4">
-              <Link href="/alice" className="hidden sm:flex text-sm text-text-secondary hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)]">
-                @alice
-              </Link>
-              <Button
-                variant="outline"
-                size="sm"
+              {username && (
+                <Link href={`/pay`} className="hidden sm:flex text-sm text-text-secondary hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)] font-bold">
+                  @{username}
+                </Link>
+              )}
+              <button
                 onClick={handleLogout}
-                className="rounded-xs border-border text-text-secondary hover:text-text-inverse transition-colors"
+                className="flex items-center gap-2 text-xs text-text-secondary hover:text-red-500 transition-colors uppercase font-black"
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                Disconnect
-              </Button>
+                <LogOut className="h-4 w-4" />
+                EXIT
+              </button>
             </div>
           )}
         </div>

@@ -32,6 +32,14 @@ class GhostAPIClient {
     );
   }
 
+  setAuthToken(token: string | null) {
+    if (token) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete this.client.defaults.headers.common['Authorization'];
+    }
+  }
+
   private handleError(error: AxiosError<APIError>): Error {
     if (error.response) {
       // Server responded with error
@@ -44,6 +52,28 @@ class GhostAPIClient {
       // Something else happened
       return new Error(error.message || 'An unexpected error occurred');
     }
+  }
+
+  // Auth endpoints
+
+  async getNonce(walletAddress: string): Promise<{ nonce: string }> {
+    const response = await this.client.post<{ nonce: string }>(
+      '/api/auth/nonce',
+      { walletAddress }
+    );
+    return response.data;
+  }
+
+  async verifySignature(
+    walletAddress: string,
+    signature: string,
+    message: string
+  ): Promise<{ token: string; user: User }> {
+    const response = await this.client.post<{ token: string; user: User }>(
+      '/api/auth/verify',
+      { walletAddress, signature, message }
+    );
+    return response.data;
   }
 
   // User endpoints
@@ -60,11 +90,26 @@ class GhostAPIClient {
     return response.data;
   }
 
+  async registerUsername(username: string): Promise<{ success: boolean; txSignature: string }> {
+    const response = await this.client.post<{ success: boolean; txSignature: string }>(
+      '/api/users/register',
+      { username }
+    );
+    return response.data;
+  }
+
+  async resolveUsername(username: string): Promise<{ walletAddress: string }> {
+    const response = await this.client.get<{ walletAddress: string }>(
+      `/api/users/resolve/${username}`
+    );
+    return response.data;
+  }
+
   // Payment endpoints
 
   async createPayment(data: CreatePaymentRequest): Promise<PaymentRequest> {
     const response = await this.client.post<{ payment: PaymentRequest }>(
-      '/api/payments',
+      '/api/payments/create',
       data
     );
     return response.data.payment;
@@ -77,11 +122,25 @@ class GhostAPIClient {
     return response.data.payment;
   }
 
-  async getPaymentHistory(walletAddress: string): Promise<PaymentRequest[]> {
+  async getPaymentByUsername(username: string): Promise<PaymentRequest[]> {
+    const response = await this.client.get<PaymentRequest[]>(
+      `/api/payments/username/${username}`
+    );
+    return response.data;
+  }
+
+  async getPaymentHistory(): Promise<PaymentRequest[]> {
     const response = await this.client.get<{ payments: PaymentRequest[] }>(
-      `/api/payments/wallet/${walletAddress}`
+      `/api/payments/history`
     );
     return response.data.payments;
+  }
+
+  async cancelPayment(id: string): Promise<{ success: boolean; txSignature: string }> {
+    const response = await this.client.post<{ success: boolean; txSignature: string }>(
+      `/api/payments/${id}/cancel`
+    );
+    return response.data;
   }
 
   // LI.FI endpoints

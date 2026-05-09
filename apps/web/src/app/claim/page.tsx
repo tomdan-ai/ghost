@@ -1,12 +1,71 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Wallet, Settings, CheckCircle, ArrowRight, User } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Wallet, Settings, CheckCircle, ArrowRight, User, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { apiClient } from '@/lib/api-client';
+import { useWalletStore } from '@/stores/wallet-store';
+import { useRouter } from 'next/navigation';
+import { useDebounce } from '@/hooks/use-debounce';
 
 export default function ClaimPage() {
-  const [username, setUsername] = useState('tom');
+  const [username, setUsername] = useState('');
+  const [isChecking, setIsChecking] = useState(false);
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const { setUsername: setStoreUsername, setHasRegistered } = useWalletStore();
+  const router = useRouter();
+  const debouncedUsername = useDebounce(username, 500);
+
+  const checkAvailability = useCallback(async (name: string) => {
+    if (name.length < 3) {
+      setIsAvailable(null);
+      return;
+    }
+    
+    setIsChecking(true);
+    setError(null);
+    try {
+      const { available } = await apiClient.checkUsername(name);
+      setIsAvailable(available);
+    } catch (err) {
+      console.error('Failed to check availability:', err);
+      setError('Connection error. Please try again.');
+    } finally {
+      setIsChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (debouncedUsername) {
+      checkAvailability(debouncedUsername);
+    } else {
+      setIsAvailable(null);
+    }
+  }, [debouncedUsername, checkAvailability]);
+
+  const handleClaim = async () => {
+    if (!isAvailable || isRegistering) return;
+
+    setIsRegistering(true);
+    setError(null);
+    try {
+      const { success } = await apiClient.registerUsername(username);
+      if (success) {
+        setStoreUsername(username);
+        setHasRegistered(true);
+        router.push('/dashboard');
+      }
+    } catch (err: any) {
+      console.error('Registration failed:', err);
+      setError(err.message || 'Registration failed. Check your balance.');
+    } finally {
+      setIsRegistering(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-surface-base text-text-inverse font-sans selection:bg-text-tertiary selection:text-surface-base flex flex-col">
@@ -48,20 +107,39 @@ export default function ClaimPage() {
                 ghost.app/
               </span>
               <input 
-                className="w-full bg-transparent border-2 border-text-inverse rounded-xl py-6 pl-32 pr-12 text-2xl font-black focus:ring-0 focus:border-text-tertiary placeholder:opacity-20 transition-colors" 
+                className={`w-full bg-transparent border-2 ${isAvailable === false ? 'border-red-500' : 'border-text-inverse'} rounded-xl py-6 pl-32 pr-12 text-2xl font-black focus:ring-0 focus:border-text-tertiary placeholder:opacity-20 transition-colors`} 
                 placeholder="username" 
                 type="text" 
                 value={username}
-                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                disabled={isRegistering}
+                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
               />
               <div className="absolute right-6 flex items-center">
-                <CheckCircle className="text-text-tertiary w-6 h-6 fill-current" />
+                {isChecking ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-text-secondary" />
+                ) : isAvailable === true ? (
+                  <CheckCircle className="text-text-tertiary w-6 h-6 fill-current" />
+                ) : isAvailable === false ? (
+                  <AlertCircle className="text-red-500 w-6 h-6" />
+                ) : null}
               </div>
             </div>
-            <div className="flex items-center gap-2 mt-2 px-2">
-              <span className="text-[10px] font-bold font-mono text-text-tertiary uppercase tracking-wider">
-                ✓ @{username || '...'} IS AVAILABLE
-              </span>
+            <div className="flex items-center gap-2 mt-2 px-2 h-4">
+              {isAvailable === true && (
+                <span className="text-[10px] font-bold font-mono text-text-tertiary uppercase tracking-wider">
+                  ✓ @{username} IS AVAILABLE
+                </span>
+              )}
+              {isAvailable === false && (
+                <span className="text-[10px] font-bold font-mono text-red-500 uppercase tracking-wider">
+                  × @{username} IS ALREADY TAKEN
+                </span>
+              )}
+              {error && (
+                <span className="text-[10px] font-bold font-mono text-red-500 uppercase tracking-wider">
+                  {error}
+                </span>
+              )}
             </div>
           </div>
 
@@ -71,7 +149,7 @@ export default function ClaimPage() {
              <div className="flex justify-between items-start">
                <div className="space-y-2">
                  <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Estimated Fee</p>
-                 <p className="text-lg font-black tracking-tight">0.0025 GHOST</p>
+                 <p className="text-lg font-black tracking-tight">0.0025 SOL</p>
                </div>
                <div className="space-y-2 text-right">
                  <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">Renewal</p>
@@ -81,10 +159,17 @@ export default function ClaimPage() {
           </div>
 
           {/* Action Button */}
-          <Button className="w-full h-24 bg-text-inverse text-surface-base text-xs font-bold uppercase tracking-[0.2em] rounded-full active:scale-95 transition-all flex justify-center items-center gap-4 hover:bg-text-tertiary hover:text-text-inverse shadow-none border-none">
-            CLAIM @{username.toUpperCase() || '...'}
-            <ArrowRight className="w-5 h-5" />
-          </Button>section
+          <Button 
+            onClick={handleClaim}
+            disabled={!isAvailable || isRegistering || username.length < 3}
+            className="w-full h-24 bg-text-inverse text-surface-base text-xs font-bold uppercase tracking-[0.2em] rounded-full active:scale-95 transition-all flex justify-center items-center gap-4 hover:bg-text-tertiary hover:text-text-inverse shadow-none border-none disabled:opacity-50 disabled:grayscale"
+          >
+            {isRegistering ? (
+              <>REGISTERING ON-CHAIN <Loader2 className="w-5 h-5 animate-spin" /></>
+            ) : (
+              <>CLAIM @{username.toUpperCase() || '...'} <ArrowRight className="w-5 h-5" /></>
+            )}
+          </Button>
         </section>
 
         {/* Footer Info */}

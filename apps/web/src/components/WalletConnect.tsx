@@ -1,24 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 export default function WalletConnect() {
-  const [connected, setConnected] = useState(false);
-  const [address] = useState('');
-
-  const handleConnect = async () => {
-    // Wallet connection logic
-    setConnected(true);
-  };
-
   return (
-    <button
-      onClick={handleConnect}
-      className="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 transition"
-    >
-      {connected
-        ? `${address.slice(0, 4)}...${address.slice(-4)}`
-        : 'Connect Wallet'}
-    </button>
+    <div className="onboarding-wallet-button-wrapper">
+      <WalletMultiButton className="!bg-text-inverse !text-surface-base !rounded-full !h-20 !w-full !px-8 !font-black !text-xs !uppercase !tracking-[0.2em] hover:!opacity-90 transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3" />
+      <style jsx global>{`
+        .onboarding-wallet-button-wrapper .wallet-adapter-button {
+          justify-content: center !important;
+          width: 100% !important;
+        }
+      `}</style>
+    </div>
   );
 }
