@@ -13,6 +13,8 @@
 
 import { PaymentStatus } from '@ghost/shared-types';
 import { prisma } from '../../config/database';
+import { logger } from '../../config/logger';
+import { AuditService } from './audit.service';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,9 +66,11 @@ export class PaymentStateService {
    * Defaults to a real setTimeout-based sleep.
    */
   private readonly _sleep: (ms: number) => Promise<void>;
+  private readonly _auditService: AuditService;
 
-  constructor(sleepFn?: (ms: number) => Promise<void>) {
+  constructor(sleepFn?: (ms: number) => Promise<void>, auditService?: AuditService) {
     this._sleep = sleepFn ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this._auditService = auditService ?? new AuditService();
   }
 
   /**
@@ -210,16 +214,30 @@ export class PaymentStateService {
     }
 
     // 5. Log the transition (Requirement 17.5).
-    console.log(
-      JSON.stringify({
-        event: 'payment_state_transition',
-        paymentId,
-        previousStatus: currentStatus,
-        newStatus,
-        reason: options.reason ?? null,
-        timestamp: new Date().toISOString(),
-      })
-    );
+    logger.info('Payment state transition', {
+      event: 'payment_state_transition',
+      paymentId,
+      previousStatus: currentStatus,
+      newStatus,
+      reason: options.reason ?? null,
+    });
+
+    // 6. Write audit trail entry (Requirement 17.5, 7.7, 7.8).
+    await this._auditService.logStateTransition(
+      paymentId,
+      currentStatus,
+      newStatus,
+      options.reason,
+      {
+        txHash: options.txHash,
+        destinationTxHash: options.destinationTxHash,
+        errorCode: options.errorCode,
+        errorDetails: options.errorDetails,
+      }
+    ).catch((err) => {
+      // Audit logging is non-critical — log the failure but don't block the transition.
+      console.error('Failed to write audit log entry:', err);
+    });
 
     return {
       id: paymentId,

@@ -2,125 +2,215 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
-import cors from 'cors';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
 import { prisma, connectDatabase } from './config/database';
 import { connectRedis, cacheService } from './config/redis';
 import { config } from './config/env';
+import { logger } from './config/logger';
+import { corsMiddleware, securityHeadersMiddleware, contentTypeValidation } from './middleware/security';
 import { rateLimitMiddleware, authRateLimitMiddleware } from './middleware/rateLimit';
+import { globalErrorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import paymentRoutes from './routes/payments';
 import { blockchainListener } from './modules/payment/blockchain-listener';
+import { setupWebSocket } from './websocket/index';
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: config.server.corsOrigin,
-  },
-});
 
-app.use(cors({
-  origin: config.server.corsOrigin,
-  credentials: true,
-}));
+// ─── Middleware (order matters) ───────────────────────────────────────────────
+
+// 1. Request logging — attach requestId and log every request/response.
+app.use(logger.requestLogger);
+
+// 2. CORS
+app.use(corsMiddleware);
+
+// 3. Security headers
+app.use(securityHeadersMiddleware);
+
+// 4. Content-Type validation
+app.use(contentTypeValidation);
+
+// 5. JSON body parsing
 app.use(express.json({ limit: '1mb' }));
 
-// Add cache service to request object
+// 6. Attach cache service to every request
 app.use((req, _res, next) => {
   (req as any).cacheService = cacheService;
   next();
 });
 
-// Global rate limiting (100 requests/minute)
+// 7. Global rate limiting (100 requests/minute)
 app.use(rateLimitMiddleware);
 
-// Routes with specific rate limiting
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
 app.use('/api/auth', authRateLimitMiddleware, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/payments', paymentRoutes);
 
+// ─── Health / monitoring endpoints ───────────────────────────────────────────
+
+/**
+ * GET /health — liveness probe with service status.
+ * Returns 200 with status 'ok' when all services are healthy.
+ * Returns 200 with status 'degraded' when Redis is down but DB is up.
+ * Returns 503 with status 'error' when DB is down.
+ */
 app.get('/health', async (_req, res) => {
+  let dbStatus = 'connected';
+  let redisStatus = 'disconnected';
+  let redisStats: Awaited<ReturnType<typeof cacheService.getStats>> | null = null;
+  let dbError: string | null = null;
+
+  // Check database
   try {
-    // Check database connection
     await prisma.$queryRaw`SELECT 1`;
-
-    // Check Redis connection
-    const redisStats = await cacheService.getStats();
-
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      environment: config.nodeEnv,
-      services: {
-        database: 'connected',
-        redis: redisStats.connected ? 'connected' : 'disconnected',
-        blockchain: blockchainListener ? 'listening' : 'inactive',
-      },
-      redis: redisStats,
-    });
   } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      services: {
-        database: 'disconnected',
-        redis: 'unknown',
-        blockchain: 'unknown',
-      },
-      message: 'Health check failed',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    dbStatus = 'disconnected';
+    dbError = error instanceof Error ? error.message : 'Unknown error';
   }
+
+  // Check Redis
+  try {
+    redisStats = await cacheService.getStats();
+    redisStatus = redisStats.connected ? 'connected' : 'disconnected';
+  } catch {
+    redisStatus = 'disconnected';
+  }
+
+  const isDbDown = dbStatus === 'disconnected';
+  const isRedisDown = redisStatus === 'disconnected';
+
+  let overallStatus: 'ok' | 'degraded' | 'error';
+  let httpStatus: number;
+
+  if (isDbDown) {
+    overallStatus = 'error';
+    httpStatus = 503;
+  } else if (isRedisDown) {
+    overallStatus = 'degraded';
+    httpStatus = 200;
+  } else {
+    overallStatus = 'ok';
+    httpStatus = 200;
+  }
+
+  const body: Record<string, unknown> = {
+    status: overallStatus,
+    timestamp: new Date().toISOString(),
+    environment: config.nodeEnv,
+    version: process.env['npm_package_version'] ?? '1.0.0',
+    uptime: process.uptime(),
+    services: {
+      database: dbStatus,
+      redis: redisStatus,
+      blockchain: blockchainListener ? 'listening' : 'inactive',
+    },
+    redis: redisStats,
+  };
+
+  if (dbError) {
+    body['error'] = dbError;
+  }
+
+  res.status(httpStatus).json(body);
 });
 
-// Cache stats endpoint (admin only)
-app.get('/health/cache', async (_req, res) => {
+/**
+ * GET /health/ready — readiness probe.
+ * Returns 200 { ready: true } only when both DB and Redis are connected.
+ * Returns 503 { ready: false, reason } otherwise.
+ */
+app.get('/health/ready', async (_req, res) => {
+  let dbOk = false;
+  let redisOk = false;
+  const reasons: string[] = [];
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbOk = true;
+  } catch {
+    reasons.push('database unavailable');
+  }
+
   try {
     const stats = await cacheService.getStats();
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      ...stats,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      message: 'Cache stats failed',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    redisOk = stats.connected;
+    if (!redisOk) {
+      reasons.push('redis unavailable');
+    }
+  } catch {
+    reasons.push('redis unavailable');
   }
-});
 
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  if (dbOk && redisOk) {
+    return res.status(200).json({ ready: true });
+  }
 
-  socket.on('subscribe:payment', (paymentId: string) => {
-    socket.join(`payment:${paymentId}`);
-  });
-
-  socket.on('subscribe:user', (userId: string) => {
-    socket.join(`user:${userId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+  return res.status(503).json({
+    ready: false,
+    reason: reasons.join(', '),
   });
 });
 
-// Make io available globally
+/**
+ * GET /health/live — simple liveness probe.
+ * Always returns 200 — just confirms the process is running.
+ */
+app.get('/health/live', (_req, res) => {
+  res.status(200).json({
+    alive: true,
+    uptime: process.uptime(),
+  });
+});
+
+/**
+ * GET /health/metrics — cache hit rates and request statistics.
+ * Returns Redis stats from cacheService.getStats().
+ * Returns 200 even if Redis is disconnected.
+ */
+app.get('/health/metrics', async (_req, res) => {
+  let stats: Awaited<ReturnType<typeof cacheService.getStats>>;
+
+  try {
+    stats = await cacheService.getStats();
+  } catch {
+    stats = { connected: false, memory: null, keys: 0 };
+  }
+
+  res.status(200).json({
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    redis: stats,
+  });
+});
+
+// ─── WebSocket setup ──────────────────────────────────────────────────────────
+
+// Replace the old inline `new Server(httpServer, ...)` + unauthenticated
+// io.on('connection', ...) block with the authenticated setupWebSocket handler.
+// setupWebSocket returns the io Server instance.
+const io = setupWebSocket(httpServer);
+
+// Make io available on the app for route handlers that need it.
 app.set('io', io);
 
-// Connect to database and start server
+// ─── Global error handler (must be last) ─────────────────────────────────────
+
+app.use(globalErrorHandler);
+
+// ─── Server startup ───────────────────────────────────────────────────────────
+
 async function startServer() {
   try {
     // Connect to database
     await connectDatabase();
 
-    // Connect to Redis (non-blocking - allows fallback)
+    // Connect to Redis (non-blocking — allows fallback)
     connectRedis().catch((error: Error) => {
       console.warn('⚠️ Redis connection failed, continuing with fallback:', error.message);
     });
@@ -147,4 +237,5 @@ async function startServer() {
 
 startServer();
 
+// Export io so blockchain-listener.ts can import it.
 export { io };
