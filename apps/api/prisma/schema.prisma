@@ -61,6 +61,7 @@ model PaymentRequest {
   
   // Relations
   transactions Transaction[]
+  auditLogs    AuditLog[]
   
   @@map("payment_requests")
   @@index([senderWallet], name: "idx_payment_requests_sender")
@@ -82,4 +83,21 @@ model Transaction {
   
   @@map("transactions")
   @@index([paymentRequestId], name: "idx_transactions_payment_request")
+}
+
+// Audit log table - records all payment state transitions (Requirements 7.7, 7.8, 17.5)
+model AuditLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentRequestId String   @map("payment_request_id") @db.Uuid
+  fromStatus       String   @map("from_status")
+  toStatus         String   @map("to_status")
+  reason           String?
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  paymentRequest PaymentRequest @relation(fields: [paymentRequestId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+  @@index([paymentRequestId], name: "idx_audit_logs_payment_request")
 }
