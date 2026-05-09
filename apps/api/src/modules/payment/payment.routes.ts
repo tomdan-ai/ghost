@@ -1,14 +1,19 @@
 import { Router } from 'express';
 import { PaymentService } from './payment.service';
-import { authMiddleware } from '../../middleware/auth';
+import { authenticate } from '../../middleware/auth';
 
 const router = Router();
 const paymentService = new PaymentService();
 
-router.post('/create', authMiddleware, async (req, res) => {
+/**
+ * POST /payment/create
+ * Create a new payment request. Requires authentication.
+ * senderWallet is always sourced from the JWT token (Requirement 3.9).
+ */
+router.post('/create', authenticate, async (req, res) => {
   try {
     const { receiverWallet, receiverUsername, amount, sourceChain, destinationChain } = req.body;
-    const { walletAddress } = req.user;
+    const { walletAddress } = (req as any).user;
 
     const payment = await paymentService.createPaymentRequest({
       senderWallet: walletAddress,
@@ -19,12 +24,23 @@ router.post('/create', authMiddleware, async (req, res) => {
       destinationChain,
     });
 
-    res.json(payment);
+    res.status(201).json(payment);
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to create payment' });
+    if (error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: { errors: error.validationErrors },
+      });
+    }
+    res.status(500).json({ error: 'Failed to create payment', code: 'INTERNAL_ERROR' });
   }
 });
 
+/**
+ * GET /payment/route
+ * Get cross-chain route from LI.FI. No authentication required.
+ */
 router.get('/route', async (req, res) => {
   try {
     const route = await paymentService.getRoute(req.query as any);
@@ -34,42 +50,72 @@ router.get('/route', async (req, res) => {
   }
 });
 
-router.get('/history', authMiddleware, async (req, res) => {
+/**
+ * GET /payment/history
+ * Get payment history for the authenticated user.
+ */
+router.get('/history', authenticate, async (req, res) => {
   try {
-    const { walletAddress } = req.user;
+    const { walletAddress } = (req as any).user;
     const history = await paymentService.getPaymentHistory(walletAddress);
-    
     res.json(history);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to get payment history' });
   }
 });
 
-router.get('/:id', async (req, res) => {
+/**
+ * GET /payment/username/:username
+ * Get payments associated with a username (checks blockchain + DB).
+ */
+router.get('/username/:username', async (req, res) => {
   try {
-    const { id } = req.params;
-    const { username } = req.query;
-    
-    const payment = await paymentService.getPaymentWithBlockchainData(
-      id,
-      username as string
-    );
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    res.json(payment);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to get payment' });
+    const { username } = req.params;
+    const payments = await paymentService.getPaymentsByUsername(username);
+    res.json(payments);
+  } catch {
+    res.status(500).json({ error: 'Failed to get payments' });
   }
 });
 
-// Cancel payment
-router.post('/:id/cancel', authMiddleware, async (req, res) => {
+/**
+ * GET /payment/:id
+ * Get a payment request by ID. Requires authentication.
+ * Only the sender or receiver of the payment may access it (Requirement 5.5).
+ */
+router.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { walletAddress } = req.user;
+    const { walletAddress } = (req as any).user;
+
+    const result = await paymentService.getPaymentByIdAuthorized(id, walletAddress);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Payment not found', code: 'NOT_FOUND' });
+    }
+
+    if (!result.authorized) {
+      return res.status(403).json({
+        error: 'Access denied',
+        code: 'ACCESS_DENIED',
+        message: 'You do not have permission to view this payment',
+      });
+    }
+
+    res.json(result.payment);
+  } catch {
+    res.status(500).json({ error: 'Failed to get payment', code: 'INTERNAL_ERROR' });
+  }
+});
+
+/**
+ * POST /payment/:id/cancel
+ * Cancel a pending payment. Requires authentication.
+ */
+router.post('/:id/cancel', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { walletAddress } = (req as any).user;
 
     const payment = await paymentService.cancelPayment(id, walletAddress);
     res.json(payment);
@@ -78,20 +124,11 @@ router.post('/:id/cancel', authMiddleware, async (req, res) => {
   }
 });
 
-// Get payments by username
-router.get('/username/:username', async (req, res) => {
-  try {
-    const { username } = req.params;
-    const payments = await paymentService.getPaymentsByUsername(username);
-    
-    res.json(payments);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to get payments' });
-  }
-});
-
-// Sync payment from blockchain
-router.post('/:id/sync', authMiddleware, async (req, res) => {
+/**
+ * POST /payment/:id/sync
+ * Sync a payment's status from the blockchain. Requires authentication.
+ */
+router.post('/:id/sync', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { username } = req.body;

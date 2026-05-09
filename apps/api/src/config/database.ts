@@ -1,17 +1,40 @@
-// Prisma is not set up yet - using Supabase directly
-// import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+import { config } from './env';
 
-// export const prisma = new PrismaClient({
-//   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-// });
+// Construct database URL from Supabase URL
+function getDatabaseUrl(): string {
+  const supabaseUrl = config.supabase.url;
+  const serviceRoleKey = config.supabase.serviceRoleKey;
 
-// Stub for now - will be replaced with Supabase queries
-export const prisma = null as any;
+  // Extract project reference from Supabase URL
+  const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
+  if (!projectRef) {
+    throw new Error('Invalid Supabase URL format');
+  }
+
+  // Construct PostgreSQL connection string
+  return `postgresql://postgres:${serviceRoleKey}@db.${projectRef}.supabase.co:5432/postgres?sslmode=require`;
+}
+
+export const prisma = new PrismaClient({
+  log: config.isDevelopment ? ['query', 'error', 'warn'] : ['error'],
+  datasources: {
+    db: {
+      url: getDatabaseUrl(),
+    },
+  },
+});
 
 export async function connectDatabase() {
-  console.log('✅ Using Supabase for database (Prisma not configured)');
+  try {
+    await prisma.$connect();
+    console.log('✅ Database connected via Prisma');
+  } catch (error) {
+    console.error('❌ Database connection failed:', error);
+    throw error;
+  }
 }
 
 export async function disconnectDatabase() {
-  // No-op for Supabase
+  await prisma.$disconnect();
 }
