@@ -11,207 +11,177 @@ import {
 
 export default function Home() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 px-6 py-24 sm:py-32 lg:px-8">
-        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
-        <div className="relative mx-auto max-w-4xl text-center">
-          <h1 className="text-5xl font-bold tracking-tight text-white sm:text-7xl">
+      <section className="px-4 py-24 sm:py-32 lg:px-8 max-w-7xl mx-auto flex flex-col items-start justify-center min-h-[70vh]">
+        <div className="max-w-4xl">
+          <h1 className="text-xl sm:text-2xl font-normal tracking-tight text-text-inverse">
             Ghost Wallet
           </h1>
-          <p className="mt-6 text-xl leading-8 text-gray-300 sm:text-2xl">
-            Universal Cross-Chain Stablecoin Identity Layer
+          <p className="mt-4 text-lg text-text-secondary leading-tight">
+            Universal Cross-Chain Stablecoin Identity Layer.
           </p>
-          <p className="mt-4 text-lg text-gray-400">
-            Anyone can pay you from any chain, while you receive stablecoins on
-            Solana.
+          <p className="mt-3 text-base text-text-secondary max-w-2xl">
+            Anyone can pay you from any chain, while you receive stablecoins on Solana. Built seamlessly with LI.FI routing.
           </p>
-          <div className="mt-10 flex items-center justify-center gap-4">
-            <Button size="lg" asChild>
+          <div className="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <Button size="lg" asChild className="rounded-xs border border-border">
               <Link href="#download">
-                Get Started <ArrowRight className="ml-2 h-4 w-4" />
+                Deploy Node <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="#how-it-works">Learn More</Link>
+            <Button size="lg" variant="outline" asChild className="rounded-xs border-border text-text-inverse hover:bg-text-inverse hover:text-surface-base">
+              <Link href="#how-it-works">Read Documentation</Link>
             </Button>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="bg-background px-6 py-24 sm:py-32 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Why Ghost Wallet?
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              The simplest way to receive cross-chain payments
-            </p>
-          </div>
-          <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <Globe className="h-10 w-10 text-primary" />
-                <CardTitle className="mt-4">Cross-Chain</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Accept payments from Ethereum, Polygon, Base, Arbitrum, and
-                  more
-                </CardDescription>
-              </CardContent>
-            </Card>
+      <section className="px-4 py-24 border-t border-border lg:px-8 max-w-7xl mx-auto">
+        <div>
+          <h2 className="text-lg sm:text-xl font-normal text-text-inverse tracking-tight">
+            Why Ghost Wallet?
+          </h2>
+          <p className="mt-3 text-md text-text-secondary max-w-xl">
+            The simplest way to receive cross-chain payments without the friction.
+          </p>
+        </div>
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="rounded-xs border border-border bg-surface-base hover:border-text-tertiary transition-colors">
+            <CardHeader className="p-4">
+              <Globe className="h-8 w-8 text-text-tertiary" />
+              <CardTitle className="mt-4 text-base font-normal text-text-inverse">Cross-Chain</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <CardDescription className="text-sm text-text-secondary">
+                Accept payments from Ethereum, Polygon, Base, Arbitrum, and more via LI.FI routing.
+              </CardDescription>
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader>
-                <Zap className="h-10 w-10 text-primary" />
-                <CardTitle className="mt-4">Instant Settlement</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  All payments automatically settle to USDC on Solana
-                </CardDescription>
-              </CardContent>
-            </Card>
+          <Card className="rounded-xs border border-border bg-surface-base hover:border-text-tertiary transition-colors">
+            <CardHeader className="p-4">
+              <Zap className="h-8 w-8 text-text-tertiary" />
+              <CardTitle className="mt-4 text-base font-normal text-text-inverse">Instant Settlement</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <CardDescription className="text-sm text-text-secondary">
+                All payments automatically settle into pure USDC on Solana instantly.
+              </CardDescription>
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader>
-                <Shield className="h-10 w-10 text-primary" />
-                <CardTitle className="mt-4">Secure</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Non-custodial. Your keys, your crypto. Always.
-                </CardDescription>
-              </CardContent>
-            </Card>
+          <Card className="rounded-xs border border-border bg-surface-base hover:border-text-tertiary transition-colors">
+            <CardHeader className="p-4">
+              <Shield className="h-8 w-8 text-text-tertiary" />
+              <CardTitle className="mt-4 text-base font-normal text-text-inverse">Secure Protocol</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <CardDescription className="text-sm text-text-secondary">
+                Non-custodial by design. Powered by Anchor and highly audited frameworks.
+              </CardDescription>
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader>
-                <Smartphone className="h-10 w-10 text-primary" />
-                <CardTitle className="mt-4">Mobile First</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Beautiful mobile app designed for everyday use
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="rounded-xs border border-border bg-surface-base hover:border-text-tertiary transition-colors">
+            <CardHeader className="p-4">
+              <Smartphone className="h-8 w-8 text-text-tertiary" />
+              <CardTitle className="mt-4 text-base font-normal text-text-inverse">Mobile First</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <CardDescription className="text-sm text-text-secondary">
+                Built natively for the Solana Mobile Stack with a beautiful intuitive app.
+              </CardDescription>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="bg-muted px-6 py-24 sm:py-32 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              How It Works
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Get paid in three simple steps
-            </p>
-          </div>
-          <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-8 lg:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
-                  1
-                </div>
-                <CardTitle className="mt-4">Register Username</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Choose your unique username like @alice and connect your
-                  Solana wallet
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
-                  2
-                </div>
-                <CardTitle className="mt-4">Share Payment Link</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Share your link ghost.app/pay/alice with anyone, anywhere
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
-                  3
-                </div>
-                <CardTitle className="mt-4">Receive Stablecoins</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  Get paid in USDC on Solana, no matter what chain they send
-                  from
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section
-        id="download"
-        className="bg-gradient-to-br from-purple-900 to-indigo-900 px-6 py-24 sm:py-32 lg:px-8"
-      >
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Ready to get started?
+      <section id="how-it-works" className="px-4 py-24 border-t border-border lg:px-8 max-w-7xl mx-auto">
+        <div>
+          <h2 className="text-lg sm:text-xl font-normal text-text-inverse tracking-tight">
+            How It Works
           </h2>
-          <p className="mt-4 text-lg text-gray-300">
-            Download Ghost Wallet and start receiving cross-chain payments today
+          <p className="mt-3 text-md text-text-secondary max-w-xl">
+            Get paid globally in three structured steps.
           </p>
-          <div className="mt-10 flex items-center justify-center gap-4">
-            <Button size="lg" variant="secondary">
-              Download for Android
+        </div>
+        <div className="mt-12 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="rounded-xs bg-surface-base border-border">
+            <CardHeader className="p-4">
+              <div className="text-xl font-normal text-text-tertiary leading-[1]">1</div>
+              <CardTitle className="mt-2 text-base font-normal text-text-inverse">Register Username</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <CardDescription className="text-sm text-text-secondary">
+                Choose your unique on-chain handle like @alice mapped specifically to your wallet.
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xs bg-surface-base border-border">
+            <CardHeader className="p-4">
+              <div className="text-xl font-normal text-text-tertiary leading-[1]">2</div>
+              <CardTitle className="mt-2 text-base font-normal text-text-inverse">Share Payment Link</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <CardDescription className="text-sm text-text-secondary">
+                Send your unique profile URL to anyone globally, regardless of their native chain.
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xs bg-surface-base border-border">
+            <CardHeader className="p-4">
+              <div className="text-xl font-normal text-text-tertiary leading-[1]">3</div>
+              <CardTitle className="mt-2 text-base font-normal text-text-inverse">Receive USDC</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <CardDescription className="text-sm text-text-secondary">
+                The protocol abstracts the bridging. You simply receive Solana stablecoins.
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* Footer / CTA section */}
+      <section id="download" className="px-4 py-32 border-t border-border lg:px-8 bg-surface-base max-w-7xl mx-auto">
+        <div className="max-w-2xl">
+          <h2 className="text-lg sm:text-xl font-normal text-text-inverse tracking-tight">
+            Ready to deploy?
+          </h2>
+          <p className="mt-3 text-md text-text-secondary">
+            Start receiving decentralized cross-chain payments immediately.
+          </p>
+          <div className="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <Button size="lg" className="rounded-xs border border-border">
+              Download Android APK
             </Button>
-            <Button size="lg" variant="outline" className="text-white">
-              View on GitHub
+            <Button size="lg" variant="outline" className="rounded-xs border border-border text-text-inverse hover:bg-text-inverse hover:text-surface-base transition-colors">
+              Access GitHub Repository
             </Button>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-background px-6 py-12 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <p className="text-sm text-muted-foreground">
-              © 2024 Ghost Wallet. All rights reserved.
-            </p>
-            <div className="flex gap-6">
-              <Link
-                href="/docs"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Docs
-              </Link>
-              <Link
-                href="/about"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                About
-              </Link>
-              <Link
-                href="https://github.com"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                GitHub
-              </Link>
-            </div>
+      <footer className="border-t border-border px-4 py-8 lg:px-8 bg-surface-base">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <p className="text-xs text-text-secondary">
+            © 2026 Ghost Wallet. All rights reserved.
+          </p>
+          <div className="flex gap-4">
+            <Link href="/docs" className="text-xs text-text-secondary hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)]">
+              Documentation
+            </Link>
+            <Link href="/about" className="text-xs text-text-secondary hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)]">
+              Protocol
+            </Link>
+            <Link href="https://github.com" className="text-xs text-text-secondary hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)]">
+              GitHub
+            </Link>
           </div>
         </div>
       </footer>

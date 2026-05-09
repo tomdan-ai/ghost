@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function PaymentPage() {
   const params = useParams();

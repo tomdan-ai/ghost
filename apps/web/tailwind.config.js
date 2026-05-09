@@ -15,12 +15,33 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['ABCNormal', 'Arial', 'sans-serif'],
+      },
+      fontSize: {
+        xs: ['18.22px', { lineHeight: '20px' }],
+        sm: ['19.18px', { lineHeight: '20px' }],
+        base: ['19.18px', { lineHeight: '20px' }],
+        md: ['31.07px', { lineHeight: '1.2' }],
+        lg: ['46.61px', { lineHeight: '1.2' }],
+        xl: ['93.21px', { lineHeight: '1.1' }],
+        '2xl': ['153.44px', { lineHeight: '1' }],
+      },
+      spacing: {
+        '1': '15.34px',
+        '2': '19.68px',
+        '3': '29.52px',
+        '4': '31.07px',
+      },
+      transitionDuration: {
+        instant: '200ms',
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
+        background: 'var(--surface-base)',
+        foreground: 'var(--text-secondary)',
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
@@ -39,21 +60,26 @@ module.exports = {
         },
         accent: {
           DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
+          foreground: 'var(--surface-base)',
         },
         popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
+          DEFAULT: 'var(--surface-base)',
+          foreground: 'var(--text-secondary)',
         },
         card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
+          DEFAULT: 'var(--surface-base)',
+          foreground: 'var(--text-secondary)',
         },
+        'text-secondary': 'var(--text-secondary)',
+        'text-tertiary': 'var(--text-tertiary)',
+        'text-inverse': 'var(--text-inverse)',
+        'surface-base': 'var(--surface-base)',
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        xs: '200px',
       },
       keyframes: {
         'accordion-down': {
