@@ -45,15 +45,19 @@ model UsernameRegistry {
 
 // Payment requests table - stores payment initiation records
 model PaymentRequest {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  senderWallet     String   @map("sender_wallet")
-  receiverWallet   String   @map("receiver_wallet")
-  amount           String   // Stored as string to preserve decimal precision
-  sourceChain      String   @map("source_chain")
-  destinationChain String   @map("destination_chain")
-  status           String   // PENDING, PROCESSING, COMPLETED, FAILED
-  txHash           String?  @map("tx_hash")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  senderWallet       String    @map("sender_wallet")
+  receiverWallet     String    @map("receiver_wallet")
+  amount             String    // Stored as string to preserve decimal precision
+  sourceChain        String    @map("source_chain")
+  destinationChain   String    @map("destination_chain")
+  status             String    // PENDING, PROCESSING, COMPLETED, FAILED
+  txHash             String?   @map("tx_hash")
+  destinationTxHash  String?   @map("destination_tx_hash")  // Req 17.7: destination chain tx hash
+  errorDetails       String?   @map("error_details")         // Req 17.6: error details on FAILED
+  errorCode          String?   @map("error_code")            // Req 17.6: error code on FAILED
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz  // Req 17.7: completion timestamp
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
   
   // Relations
   transactions Transaction[]

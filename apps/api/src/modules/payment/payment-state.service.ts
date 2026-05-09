@@ -19,13 +19,13 @@ import { prisma } from '../../config/database';
 export interface StateTransitionOptions {
   /** Source transaction hash (stored when moving to PROCESSING). */
   txHash?: string;
-  /** Destination transaction hash (stored when moving to COMPLETED). */
+  /** Destination transaction hash (stored when moving to COMPLETED). Requirement 17.7. */
   destinationTxHash?: string;
   /** Human-readable reason for the transition (stored in audit log). */
   reason?: string;
-  /** Error details stored when transitioning to FAILED. */
+  /** Error details stored when transitioning to FAILED. Requirement 17.6. */
   errorDetails?: string;
-  /** Error code stored when transitioning to FAILED. */
+  /** Error code stored when transitioning to FAILED. Requirement 17.6. */
   errorCode?: string;
 }
 
@@ -33,6 +33,7 @@ export interface StateTransitionResult {
   id: string;
   status: string;
   txHash: string | null;
+  destinationTxHash: string | null;
   previousStatus: PaymentStatus;
   newStatus: PaymentStatus;
 }
@@ -50,9 +51,24 @@ export const VALID_TRANSITIONS: Readonly<Record<PaymentStatus, ReadonlySet<Payme
   [PaymentStatus.FAILED]: new Set(),
 };
 
+// ─── Retry configuration ──────────────────────────────────────────────────────
+
+export const RETRY_BASE_DELAY_MS = 100;
+export const RETRY_MAX_ATTEMPTS = 3;
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class PaymentStateService {
+  /**
+   * Delay function — injectable for testing to avoid real timer delays.
+   * Defaults to a real setTimeout-based sleep.
+   */
+  private readonly _sleep: (ms: number) => Promise<void>;
+
+  constructor(sleepFn?: (ms: number) => Promise<void>) {
+    this._sleep = sleepFn ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  }
+
   /**
    * Check whether a transition from `from` to `to` is valid.
    */
@@ -83,11 +99,27 @@ export class PaymentStateService {
    * Uses a database-level update with a WHERE clause that includes the
    * expected current status to guard against concurrent transitions
    * (Requirement 17.8).
+   *
+   * Retries with exponential backoff when a concurrent transition is detected
+   * (Requirement 17.9).
    */
   async transition(
     paymentId: string,
     newStatus: PaymentStatus,
     options: StateTransitionOptions = {}
+  ): Promise<StateTransitionResult> {
+    return this._transitionWithRetry(paymentId, newStatus, options, 0);
+  }
+
+  /**
+   * Internal implementation with retry counter for exponential backoff.
+   * Requirement 17.9: retry with exponential backoff on concurrent transition failure.
+   */
+  private async _transitionWithRetry(
+    paymentId: string,
+    newStatus: PaymentStatus,
+    options: StateTransitionOptions,
+    attempt: number
   ): Promise<StateTransitionResult> {
     // 1. Load the current payment record.
     const payment = await prisma.paymentRequest.findUnique({
@@ -125,6 +157,14 @@ export class PaymentStateService {
       updateData['txHash'] = options.txHash;
     }
 
+    // Store destination tx hash and completion timestamp when transitioning to COMPLETED (Requirement 17.7).
+    if (newStatus === PaymentStatus.COMPLETED) {
+      if (options.destinationTxHash !== undefined) {
+        updateData['destinationTxHash'] = options.destinationTxHash;
+      }
+      updateData['completedAt'] = new Date();
+    }
+
     // Store error details when transitioning to FAILED (Requirement 17.6).
     if (newStatus === PaymentStatus.FAILED) {
       if (options.errorDetails !== undefined) {
@@ -148,13 +188,21 @@ export class PaymentStateService {
     });
 
     if (updated.count === 0) {
-      // Another process already changed the status — re-read and report.
+      // Another process already changed the status — retry with exponential backoff
+      // (Requirement 17.9).
+      if (attempt < RETRY_MAX_ATTEMPTS - 1) {
+        const delayMs = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+        await this._sleep(delayMs);
+        return this._transitionWithRetry(paymentId, newStatus, options, attempt + 1);
+      }
+
+      // Max retries exhausted — re-read and report the conflict.
       const current = await prisma.paymentRequest.findUnique({ where: { id: paymentId } });
       const actualStatus = current?.status ?? 'unknown';
 
       const err = new Error(
         `Concurrent state transition detected for payment ${paymentId}. ` +
-          `Expected status ${currentStatus} but found ${actualStatus}.`
+          `Expected status ${currentStatus} but found ${actualStatus} after ${RETRY_MAX_ATTEMPTS} attempts.`
       );
       (err as any).code = 'CONCURRENT_TRANSITION';
       (err as any).paymentId = paymentId;
@@ -177,6 +225,8 @@ export class PaymentStateService {
       id: paymentId,
       status: newStatus,
       txHash: (updateData['txHash'] as string | null | undefined) ?? payment.txHash,
+      destinationTxHash:
+        (updateData['destinationTxHash'] as string | null | undefined) ?? null,
       previousStatus: currentStatus,
       newStatus,
     };
