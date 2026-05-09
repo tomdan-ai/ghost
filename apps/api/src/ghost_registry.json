@@ -1,0 +1,513 @@
+{
+  "version": "0.1.0",
+  "name": "ghost_registry",
+  "address": "5v95TCKx8XvdXKnGjFQUumdNwdAuM6prvcYx6YfZxBKH",
+  "instructions": [
+    {
+      "name": "registerUsername",
+      "accounts": [
+        {
+          "name": "registry",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type": "string"
+        }
+      ],
+      "discriminator": [
+        134,
+        54,
+        123,
+        181,
+        28,
+        151,
+        36,
+        0
+      ]
+    },
+    {
+      "name": "updateWallet",
+      "accounts": [
+        {
+          "name": "registry",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "wallet",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "newWallet",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [],
+      "discriminator": [
+        30,
+        233,
+        126,
+        238,
+        58,
+        16,
+        215,
+        184
+      ]
+    },
+    {
+      "name": "closeUsername",
+      "accounts": [
+        {
+          "name": "registry",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "wallet",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [],
+      "discriminator": [
+        16,
+        63,
+        157,
+        190,
+        111,
+        238,
+        169,
+        39
+      ]
+    },
+    {
+      "name": "createPaymentReference",
+      "accounts": [
+        {
+          "name": "reference",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "registry",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "payer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        }
+      ],
+      "discriminator": [
+        167,
+        213,
+        76,
+        34,
+        23,
+        85,
+        154,
+        132
+      ]
+    },
+    {
+      "name": "claimPaymentReference",
+      "accounts": [
+        {
+          "name": "reference",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "registry",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "string"
+        }
+      ],
+      "discriminator": [
+        124,
+        225,
+        75,
+        162,
+        135,
+        86,
+        134,
+        167
+      ]
+    },
+    {
+      "name": "cancelPaymentReference",
+      "accounts": [
+        {
+          "name": "reference",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "registry",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "string"
+        }
+      ],
+      "discriminator": [
+        73,
+        4,
+        218,
+        243,
+        11,
+        31,
+        154,
+        205
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ghost_registry::UsernameRegistry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "username",
+            "type": "string"
+          },
+          {
+            "name": "wallet",
+            "type": "publicKey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          }
+        ]
+      },
+      "discriminator": [
+        145,
+        217,
+        207,
+        126,
+        35,
+        114,
+        138,
+        18
+      ]
+    },
+    {
+      "name": "ghost_registry::PaymentReference",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "string"
+          },
+          {
+            "name": "sender",
+            "type": "publicKey"
+          },
+          {
+            "name": "receiver",
+            "type": "publicKey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sourceChain",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": "ghost_registry::PaymentStatus"
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          }
+        ]
+      },
+      "discriminator": [
+        54,
+        135,
+        178,
+        71,
+        171,
+        142,
+        69,
+        218
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "ghost_registry::PaymentStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Claimed"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "UsernameRegistered",
+      "fields": [
+        {
+          "name": "username",
+          "type": "string",
+          "index": false
+        },
+        {
+          "name": "wallet",
+          "type": "publicKey",
+          "index": false
+        }
+      ],
+      "discriminator": [
+        85,
+        149,
+        174,
+        185,
+        17,
+        151,
+        76,
+        23
+      ]
+    },
+    {
+      "name": "WalletUpdated",
+      "fields": [
+        {
+          "name": "username",
+          "type": "string",
+          "index": false
+        },
+        {
+          "name": "oldWallet",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "newWallet",
+          "type": "publicKey",
+          "index": false
+        }
+      ],
+      "discriminator": [
+        136,
+        9,
+        161,
+        98,
+        92,
+        134,
+        183,
+        241
+      ]
+    },
+    {
+      "name": "PaymentReferenceCreated",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "index": false
+        },
+        {
+          "name": "sender",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "receiver",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "username",
+          "type": "string",
+          "index": false
+        },
+        {
+          "name": "amount",
+          "type": "u64",
+          "index": false
+        }
+      ],
+      "discriminator": [
+        219,
+        248,
+        32,
+        172,
+        137,
+        175,
+        127,
+        190
+      ]
+    },
+    {
+      "name": "PaymentReferenceClaimed",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "index": false
+        },
+        {
+          "name": "receiver",
+          "type": "publicKey",
+          "index": false
+        }
+      ],
+      "discriminator": [
+        85,
+        83,
+        109,
+        36,
+        191,
+        7,
+        133,
+        184
+      ]
+    },
+    {
+      "name": "PaymentReferenceCancelled",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "index": false
+        },
+        {
+          "name": "sender",
+          "type": "publicKey",
+          "index": false
+        }
+      ],
+      "discriminator": [
+        224,
+        235,
+        249,
+        146,
+        118,
+        140,
+        79,
+        252
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UsernameTooShort",
+      "msg": "Username must be at least 3 characters"
+    },
+    {
+      "code": 6001,
+      "name": "UsernameTooLong",
+      "msg": "Username must be 32 characters or less"
+    },
+    {
+      "code": 6002,
+      "name": "IdentifierTooLong",
+      "msg": "Identifier must be 64 characters or less"
+    },
+    {
+      "code": 6003,
+      "name": "ChainNameTooLong",
+      "msg": "Chain name must be 32 characters or less"
+    },
+    {
+      "code": 6004,
+      "name": "PaymentAlreadyFinalized",
+      "msg": "Payment has already been finalized"
+    },
+    {
+      "code": 6005,
+      "name": "Unauthorized",
+      "msg": "Not authorized"
+    }
+  ],
+  "metadata": {
+    "name": "ghost_registry",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Ghost Wallet Username Registry"
+  }
+}

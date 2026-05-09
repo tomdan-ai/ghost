@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -9,6 +12,7 @@ import { rateLimitMiddleware, authRateLimitMiddleware } from './middleware/rateL
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import paymentRoutes from './routes/payments';
+import { blockchainListener } from './modules/payment/blockchain-listener';
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,7 +29,7 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 
 // Add cache service to request object
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   (req as any).cacheService = cacheService;
   next();
 });
@@ -38,31 +42,33 @@ app.use('/api/auth', authRateLimitMiddleware, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/payments', paymentRoutes);
 
-app.get('/health', async (req, res) => {
+app.get('/health', async (_req, res) => {
   try {
     // Check database connection
     await prisma.$queryRaw`SELECT 1`;
-    
+
     // Check Redis connection
     const redisStats = await cacheService.getStats();
-    
-    res.json({ 
+
+    res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       environment: config.nodeEnv,
       services: {
         database: 'connected',
         redis: redisStats.connected ? 'connected' : 'disconnected',
+        blockchain: blockchainListener ? 'listening' : 'inactive',
       },
       redis: redisStats,
     });
   } catch (error) {
-    res.status(500).json({ 
-      status: 'error', 
+    res.status(500).json({
+      status: 'error',
       timestamp: new Date().toISOString(),
       services: {
         database: 'disconnected',
         redis: 'unknown',
+        blockchain: 'unknown',
       },
       message: 'Health check failed',
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -71,7 +77,7 @@ app.get('/health', async (req, res) => {
 });
 
 // Cache stats endpoint (admin only)
-app.get('/health/cache', async (req, res) => {
+app.get('/health/cache', async (_req, res) => {
   try {
     const stats = await cacheService.getStats();
     res.json({
@@ -91,11 +97,15 @@ app.get('/health/cache', async (req, res) => {
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
-  
+
   socket.on('subscribe:payment', (paymentId: string) => {
     socket.join(`payment:${paymentId}`);
   });
-  
+
+  socket.on('subscribe:user', (userId: string) => {
+    socket.join(`user:${userId}`);
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });
@@ -109,12 +119,12 @@ async function startServer() {
   try {
     // Connect to database
     await connectDatabase();
-    
+
     // Connect to Redis (non-blocking - allows fallback)
-    connectRedis().catch(error => {
+    connectRedis().catch((error: Error) => {
       console.warn('⚠️ Redis connection failed, continuing with fallback:', error.message);
     });
-    
+
     httpServer.listen(config.server.port, () => {
       console.log(`🚀 Ghost API running on port ${config.server.port}`);
       console.log(`   Environment: ${config.nodeEnv}`);
@@ -122,6 +132,13 @@ async function startServer() {
       console.log(`   Rate Limit: ${config.rateLimit.maxRequests} requests/minute`);
       console.log(`   Cache TTL: ${config.cache.routesTtlMs / 60000} minutes for routes`);
     });
+
+    // Start blockchain listener (non-blocking)
+    if (process.env['ENABLE_BLOCKCHAIN_LISTENER'] !== 'false') {
+      blockchainListener.start().catch((error: Error) => {
+        console.warn('⚠️ Failed to start blockchain listener:', error.message);
+      });
+    }
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);

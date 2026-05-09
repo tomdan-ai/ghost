@@ -1,3 +1,52 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root, .dark {
+    --surface-base: #000000;
+    --text-secondary: #fbffea;
+    --text-tertiary: #0000ee;
+    --text-inverse: #ffffff;
+    
+    /* Shadcn defaults implicitly referencing Seal colors for compatibility */
+    --background: 0 0% 0%;
+    --foreground: 73 100% 96%;
+    --card: 0 0% 0%;
+    --card-foreground: 73 100% 96%;
+    --popover: 0 0% 0%;
+    --popover-foreground: 73 100% 96%;
+    --primary: 240 100% 47%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 0%;
+    --secondary-foreground: 73 100% 96%;
+    --muted: 0 0% 0%;
+    --muted-foreground: 73 100% 96%;
+    --accent: 0 0% 0%;
+    --accent-foreground: 73 100% 96%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 240 100% 47%;
+    --radius: 200px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    background-color: var(--surface-base);
+    color: var(--text-secondary);
+    font-size: 19.18px; /* font.size.base */
+    font-weight: 400;
+    line-height: 20px;
+  }
+  /* Enforce keyboard-first interaction visibility (WCAG AA requirement) */
+  *:focus-visible {
+    outline: 2px solid var(--text-tertiary);
+    outline-offset: 4px;
+  }
+}

@@ -1,16 +1,20 @@
+[toolchain]
+
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.localnet]
-ghost_registry = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+ghost_registry = "5v95TCKx8XvdXKnGjFQUumdNwdAuM6prvcYx6YfZxBKH"
 
-[registry]
-url = "https://api.apr.dev"
+[programs.devnet]
+ghost_registry = "5v95TCKx8XvdXKnGjFQUumdNwdAuM6prvcYx6YfZxBKH"
 
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[hooks]

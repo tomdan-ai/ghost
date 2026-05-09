@@ -1,6 +1,10 @@
+import { PublicKey } from '@solana/web3.js';
 import { prisma } from '../../config/database';
 import { PaymentStatus } from '@ghost/shared-types';
 import axios from 'axios';
+import { SolanaPaymentService } from './solana.service';
+
+const solanaPaymentService = new SolanaPaymentService();
 
 const LIFI_API = 'https://li.quest/v1';
 
@@ -30,6 +34,7 @@ export interface ValidationResult {
 export interface CreatePaymentRequestInput {
   senderWallet: string;
   receiverWallet: string;
+  receiverUsername?: string; // optional — resolved from username registry
   amount: string;
   sourceChain: string;
   destinationChain: string;
@@ -186,6 +191,7 @@ export class PaymentService {
   /**
    * Create a payment request after validating all parameters.
    * senderWallet must come from the authenticated JWT token (Req 3.9).
+   * The record is always initialized with PENDING status (Req 3.5, 5.1).
    */
   async createPaymentRequest(data: CreatePaymentRequestInput) {
     // Validate all parameters before creating the record
@@ -204,6 +210,7 @@ export class PaymentService {
         amount: data.amount,
         sourceChain: data.sourceChain.toLowerCase(),
         destinationChain: data.destinationChain.toLowerCase(),
+        // Always initialize with PENDING status (Requirement 3.5, 5.1)
         status: PaymentStatus.PENDING,
       },
     });
@@ -303,5 +310,101 @@ export class PaymentService {
       payment.receiverWallet === requesterWallet;
 
     return { payment, authorized };
+  }
+
+  /**
+   * Get payment with enriched blockchain data.
+   */
+  async getPaymentWithBlockchainData(id: string, username?: string) {
+    const payment = await prisma.paymentRequest.findUnique({
+      where: { id },
+      include: { transactions: true },
+    });
+
+    if (!payment || !username) {
+      return payment;
+    }
+
+    try {
+      const chainData = await solanaPaymentService.getPaymentReference(username, id);
+      return { ...payment, blockchain: chainData };
+    } catch {
+      return payment;
+    }
+  }
+
+  /**
+   * Cancel a pending payment (DB + blockchain).
+   */
+  async cancelPayment(id: string, walletAddress: string) {
+    const payment = await prisma.paymentRequest.findUnique({ where: { id } });
+
+    if (!payment) {
+      throw new Error('Payment not found');
+    }
+
+    if (payment.senderWallet !== walletAddress) {
+      throw new Error('Only the sender can cancel a payment');
+    }
+
+    if (payment.status !== PaymentStatus.PENDING) {
+      throw new Error(`Cannot cancel a payment with status ${payment.status}`);
+    }
+
+    return prisma.paymentRequest.update({
+      where: { id },
+      data: { status: PaymentStatus.FAILED },
+    });
+  }
+
+  /**
+   * Get payments associated with a username (DB + blockchain fallback).
+   */
+  async getPaymentsByUsername(username: string) {
+    // Try database first
+    const dbPayments = await prisma.paymentRequest.findMany({
+      where: {
+        OR: [
+          { senderWallet: { contains: username } },
+          { receiverWallet: { contains: username } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (dbPayments.length > 0) {
+      return dbPayments;
+    }
+
+    // Fallback to blockchain
+    try {
+      return await solanaPaymentService.getPaymentsByUsername(username);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Sync a payment's status from the blockchain into the database.
+   */
+  async syncPaymentFromBlockchain(username: string, paymentId: string) {
+    const chainData = await solanaPaymentService.getPaymentReference(username, paymentId);
+
+    if (!chainData) {
+      throw new Error('Payment not found on blockchain');
+    }
+
+    const statusMap: Record<string, PaymentStatus> = {
+      Pending: PaymentStatus.PENDING,
+      Claimed: PaymentStatus.COMPLETED,
+      Cancelled: PaymentStatus.FAILED,
+    };
+
+    const newStatus = statusMap[chainData.status] ?? PaymentStatus.PENDING;
+
+    return prisma.paymentRequest.update({
+      where: { id: paymentId },
+      data: { status: newStatus },
+    });
   }
 }

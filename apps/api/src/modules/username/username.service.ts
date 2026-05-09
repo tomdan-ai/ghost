@@ -1,5 +1,9 @@
+import { PublicKey } from '@solana/web3.js';
 import { prisma } from '../../config/database';
 import { cacheService } from '../../config/redis';
+import { SolanaUsernameService } from './solana.service';
+
+const solanaService = new SolanaUsernameService();
 
 export class UsernameService {
   private readonly usernameRegex = /^[a-z0-9]{3,20}$/; // alphanumeric, lowercase, 3-20 chars
@@ -9,14 +13,11 @@ export class UsernameService {
     'test', 'demo', 'example', 'user', 'username', 'account',
   ];
 
-  // Validate username format
-  validateUsername(username: string): {
-    valid: boolean;
-    errors: string[];
-  } {
+  // ─── Validation ────────────────────────────────────────────────────────────
+
+  validateUsername(username: string): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    // Check length
     if (username.length < 3) {
       errors.push('Username must be at least 3 characters long');
     }
@@ -24,282 +25,251 @@ export class UsernameService {
       errors.push('Username must be at most 20 characters long');
     }
 
-    // Check format (alphanumeric, lowercase)
     if (!this.usernameRegex.test(username)) {
       errors.push('Username can only contain lowercase letters and numbers (a-z, 0-9)');
     }
 
-    // Check for reserved usernames
     if (this.reservedUsernames.includes(username.toLowerCase())) {
       errors.push('This username is reserved');
     }
 
-    // Check for offensive/inappropriate content (basic check)
     if (this.containsInappropriateContent(username)) {
       errors.push('Username contains inappropriate content');
     }
 
-    return {
-      valid: errors.length === 0,
-      errors,
-    };
+    return { valid: errors.length === 0, errors };
   }
 
-  // Check username availability with caching
+  // ─── Availability ──────────────────────────────────────────────────────────
+
+  /**
+   * Check username availability against both the database and the blockchain.
+   */
   async checkAvailability(username: string): Promise<{
     available: boolean;
     cached: boolean;
     validation?: { valid: boolean; errors: string[] };
   }> {
-    // First validate the username format
+    // Validate format first
     const validation = this.validateUsername(username);
     if (!validation.valid) {
-      return {
-        available: false,
-        cached: false,
-        validation,
-      };
+      return { available: false, cached: false, validation };
     }
 
-    // Check cache first
+    // Check Redis cache
     const cached = await cacheService.getCachedUsernameAvailability(username);
-    
     if (cached) {
-      return {
-        available: cached.available,
-        cached: true,
-      };
+      return { available: cached.available, cached: true };
     }
 
     // Check database
-    const existing = await prisma.usernameRegistry.findUnique({
+    const existingInDb = await prisma.usernameRegistry.findUnique({
       where: { username: username.toLowerCase() },
     });
 
-    const isAvailable = !existing;
+    if (existingInDb) {
+      await cacheService.cacheUsernameAvailability(username, false);
+      return { available: false, cached: false };
+    }
 
-    // Cache the result
+    // Check blockchain (authoritative source)
+    const existsOnChain = await solanaService.checkUsernameOnChain(username);
+    const isAvailable = !existsOnChain;
+
     await cacheService.cacheUsernameAvailability(username, isAvailable);
-
-    return {
-      available: isAvailable,
-      cached: false,
-    };
+    return { available: isAvailable, cached: false };
   }
 
-  // Register username with validation
+  // ─── Registration ──────────────────────────────────────────────────────────
+
+  /**
+   * Register a username on-chain first, then persist to the database.
+   */
   async register(
     username: string,
     walletAddress: string,
     userId: string
-  ): Promise<{
-    success: boolean;
-    registry?: any;
-    errors?: string[];
-  }> {
+  ): Promise<{ success: boolean; registry?: any; errors?: string[] }> {
     try {
-      // Validate username format
+      // Validate format
       const validation = this.validateUsername(username);
       if (!validation.valid) {
-        return {
-          success: false,
-          errors: validation.errors,
-        };
+        return { success: false, errors: validation.errors };
       }
 
-      // Check availability
+      // Check availability (DB + chain)
       const availability = await this.checkAvailability(username);
       if (!availability.available) {
-        return {
-          success: false,
-          errors: ['Username already taken'],
-        };
+        return { success: false, errors: ['Username already taken'] };
       }
 
       // Verify user exists and owns the wallet
       const user = await prisma.user.findUnique({
         where: { id: userId, walletAddress },
       });
-
       if (!user) {
-        return {
-          success: false,
-          errors: ['User not found or wallet address mismatch'],
-        };
+        return { success: false, errors: ['User not found or wallet address mismatch'] };
       }
 
       // Check if user already has a username
       const existingRegistry = await prisma.usernameRegistry.findUnique({
         where: { walletAddress },
       });
-
       if (existingRegistry) {
-        return {
-          success: false,
-          errors: ['User already has a registered username'],
-        };
+        return { success: false, errors: ['User already has a registered username'] };
       }
 
-      // Create username registry entry
+      // Register on blockchain first
+      const userWallet = new PublicKey(walletAddress);
+      const { signature, registryPDA } = await solanaService.registerUsername(
+        username.toLowerCase(),
+        userWallet
+      );
+
+      // Persist to database
       const registry = await prisma.usernameRegistry.create({
         data: {
           username: username.toLowerCase(),
           walletAddress,
           userId,
+          onChainAddress: registryPDA,
+          registrationTx: signature,
         },
       });
 
-      // Update user's username
+      // Update user record
       await prisma.user.update({
         where: { id: userId },
         data: { username: username.toLowerCase() },
       });
 
-      // Invalidate cache
+      // Invalidate caches
       await cacheService.invalidateUserProfile(walletAddress);
       await cacheService.delete(`username:availability:${username.toLowerCase()}`);
 
-      return {
-        success: true,
-        registry,
-      };
+      return { success: true, registry };
     } catch (error) {
       console.error('Username registration error:', error);
-      
+
       if (error instanceof Error) {
-        // Handle unique constraint violations
         if (error.message.includes('Unique constraint')) {
-          return {
-            success: false,
-            errors: ['Username already taken'],
-          };
+          return { success: false, errors: ['Username already taken'] };
         }
       }
 
-      return {
-        success: false,
-        errors: ['Registration failed'],
-      };
+      return { success: false, errors: ['Registration failed'] };
     }
   }
 
-  // Resolve username to wallet address with caching
+  // ─── Resolution ────────────────────────────────────────────────────────────
+
+  /**
+   * Resolve a username to its wallet address and user data.
+   * Checks database first (fast), falls back to blockchain.
+   */
   async resolve(username: string): Promise<{
     found: boolean;
     data?: any;
     cached?: boolean;
   }> {
-    // Check cache first
     const cacheKey = `username:resolve:${username.toLowerCase()}`;
     const cached = await cacheService.get(cacheKey);
-    
     if (cached) {
-      return {
-        found: true,
-        data: cached,
-        cached: true,
-      };
+      return { found: true, data: cached, cached: true };
     }
 
-    // Query database
+    // Try database first
     const registry = await prisma.usernameRegistry.findUnique({
       where: { username: username.toLowerCase() },
       include: {
         user: {
-          select: {
-            id: true,
-            walletAddress: true,
-            username: true,
-            createdAt: true,
-          },
+          select: { id: true, walletAddress: true, username: true, createdAt: true },
         },
       },
     });
 
-    if (!registry) {
-      return {
-        found: false,
-      };
+    if (registry) {
+      await cacheService.set(cacheKey, registry, 10 * 60 * 1000);
+      return { found: true, data: registry, cached: false };
     }
 
-    // Cache the result
-    await cacheService.set(cacheKey, registry, 10 * 60 * 1000); // 10 minutes
+    // Fallback to blockchain
+    const chainData = await solanaService.getUsernameRegistry(username);
+    if (chainData) {
+      const data = {
+        username: chainData.username,
+        walletAddress: chainData.wallet,
+        onChainAddress: chainData.pda,
+        createdAt: new Date(chainData.createdAt * 1000),
+      };
+      await cacheService.set(cacheKey, data, 10 * 60 * 1000);
+      return { found: true, data, cached: false };
+    }
 
-    return {
-      found: true,
-      data: registry,
-      cached: false,
-    };
+    return { found: false };
   }
 
-  // Get username by wallet address
+  // ─── Lookup by wallet ──────────────────────────────────────────────────────
+
   async getByWallet(walletAddress: string): Promise<any> {
-    return prisma.usernameRegistry.findUnique({
+    // Check database first
+    const dbResult = await prisma.usernameRegistry.findUnique({
       where: { walletAddress },
       include: {
         user: {
-          select: {
-            id: true,
-            walletAddress: true,
-            username: true,
-            createdAt: true,
-          },
+          select: { id: true, walletAddress: true, username: true, createdAt: true },
         },
       },
     });
+
+    if (dbResult) {
+      return dbResult;
+    }
+
+    // Fallback to blockchain
+    try {
+      const userWallet = new PublicKey(walletAddress);
+      const chainUsernames = await solanaService.getUsernamesByWallet(userWallet);
+      return chainUsernames[0] || null;
+    } catch {
+      return null;
+    }
   }
 
-  // Update username (for existing users)
+  // ─── Update username ───────────────────────────────────────────────────────
+
   async updateUsername(
     userId: string,
     newUsername: string
-  ): Promise<{
-    success: boolean;
-    errors?: string[];
-  }> {
+  ): Promise<{ success: boolean; errors?: string[] }> {
     try {
-      // Get user
       const user = await prisma.user.findUnique({
         where: { id: userId },
         include: { usernameRegistry: true },
       });
 
       if (!user) {
-        return {
-          success: false,
-          errors: ['User not found'],
-        };
+        return { success: false, errors: ['User not found'] };
       }
 
-      // Validate new username
       const validation = this.validateUsername(newUsername);
       if (!validation.valid) {
-        return {
-          success: false,
-          errors: validation.errors,
-        };
+        return { success: false, errors: validation.errors };
       }
 
-      // Check availability
       const availability = await this.checkAvailability(newUsername);
       if (!availability.available) {
-        return {
-          success: false,
-          errors: ['Username already taken'],
-        };
+        return { success: false, errors: ['Username already taken'] };
       }
 
-      // Start transaction
-      await prisma.$transaction(async (tx: typeof prisma) => {
-        // Delete old registry entry if exists
+      await prisma.$transaction(async (tx) => {
         if (user.usernameRegistry) {
           await tx.usernameRegistry.delete({
             where: { id: user.usernameRegistry.id },
           });
         }
 
-        // Create new registry entry
-        const newRegistry = await tx.usernameRegistry.create({
+        await tx.usernameRegistry.create({
           data: {
             username: newUsername.toLowerCase(),
             walletAddress: user.walletAddress,
@@ -307,13 +277,10 @@ export class UsernameService {
           },
         });
 
-        // Update user
         await tx.user.update({
           where: { id: userId },
           data: { username: newUsername.toLowerCase() },
         });
-
-        return newRegistry;
       });
 
       // Invalidate caches
@@ -324,30 +291,46 @@ export class UsernameService {
         await cacheService.delete(`username:resolve:${user.username.toLowerCase()}`);
       }
 
-      return {
-        success: true,
-      };
+      return { success: true };
     } catch (error) {
       console.error('Username update error:', error);
-      return {
-        success: false,
-        errors: ['Update failed'],
-      };
+      return { success: false, errors: ['Update failed'] };
     }
   }
 
-  // Search usernames (for autocomplete)
-  async searchUsernames(query: string, limit: number = 10): Promise<any[]> {
-    if (!query || query.length < 2) {
-      return [];
+  // ─── Blockchain sync ───────────────────────────────────────────────────────
+
+  /**
+   * Sync a username from the blockchain into the database.
+   */
+  async syncFromBlockchain(username: string): Promise<any> {
+    const chainData = await solanaService.getUsernameRegistry(username);
+    if (!chainData) {
+      throw new Error('Username not found on blockchain');
     }
+
+    const existing = await prisma.usernameRegistry.findUnique({ where: { username } });
+    if (existing) {
+      return prisma.usernameRegistry.update({
+        where: { username },
+        data: {
+          walletAddress: chainData.wallet,
+          onChainAddress: chainData.pda,
+        },
+      });
+    }
+
+    return chainData;
+  }
+
+  // ─── Search / stats ────────────────────────────────────────────────────────
+
+  async searchUsernames(query: string, limit = 10): Promise<any[]> {
+    if (!query || query.length < 2) return [];
 
     return prisma.usernameRegistry.findMany({
       where: {
-        username: {
-          contains: query.toLowerCase(),
-          mode: 'insensitive',
-        },
+        username: { contains: query.toLowerCase(), mode: 'insensitive' },
       },
       take: limit,
       select: {
@@ -355,97 +338,55 @@ export class UsernameService {
         walletAddress: true,
         createdAt: true,
         user: {
-          select: {
-            id: true,
-            walletAddress: true,
-            username: true,
-            createdAt: true,
-          },
+          select: { id: true, walletAddress: true, username: true, createdAt: true },
         },
       },
-      orderBy: {
-        username: 'asc',
-      },
+      orderBy: { username: 'asc' },
     });
   }
 
-  // Get username statistics
   async getStats(): Promise<{
     total: number;
     recent: number;
     popularUsernames: Array<{ username: string; count: number }>;
   }> {
     const total = await prisma.usernameRegistry.count();
-    
+
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
+
     const recent = await prisma.usernameRegistry.count({
-      where: {
-        createdAt: {
-          gte: oneWeekAgo,
-        },
-      },
+      where: { createdAt: { gte: oneWeekAgo } },
     });
 
-    // Note: In production, you'd have a separate table for username popularity
-    // For now, return placeholder
-    const popularUsernames: Array<{ username: string; count: number }> = [];
-
-    return {
-      total,
-      recent,
-      popularUsernames,
-    };
+    return { total, recent, popularUsernames: [] };
   }
 
-  // Check for inappropriate content (basic implementation)
-  private containsInappropriateContent(username: string): boolean {
-    const inappropriatePatterns = [
-      /fuck/i,
-      /shit/i,
-      /asshole/i,
-      /bitch/i,
-      /nigger/i,
-      /cunt/i,
-      /dick/i,
-      /pussy/i,
-      /whore/i,
-      /slut/i,
-    ];
-
-    return inappropriatePatterns.some(pattern => pattern.test(username));
-  }
-
-  // Generate suggested usernames
-  generateSuggestions(baseUsername: string, count: number = 5): string[] {
-    const suggestions: string[] = [];
+  generateSuggestions(baseUsername: string, count = 5): string[] {
     const cleanBase = baseUsername.replace(/[^a-z0-9]/g, '').toLowerCase();
+    const suggestions: string[] = [];
 
-    if (cleanBase.length >= 3) {
-      suggestions.push(cleanBase);
-    }
+    if (cleanBase.length >= 3) suggestions.push(cleanBase);
 
-    // Add numbers
     for (let i = 1; i <= count; i++) {
-      const suggestion = `${cleanBase}${i}`;
-      if (suggestion.length <= 20) {
-        suggestions.push(suggestion);
-      }
+      const s = `${cleanBase}${i}`;
+      if (s.length <= 20) suggestions.push(s);
     }
 
-    // Add common suffixes
-    const suffixes = ['official', 'real', 'true', 'the', 'one', 'only'];
-    for (const suffix of suffixes) {
-      const suggestion = `${cleanBase}${suffix}`;
-      if (suggestion.length <= 20) {
-        suggestions.push(suggestion);
-      }
+    for (const suffix of ['official', 'real', 'true', 'the', 'one', 'only']) {
+      const s = `${cleanBase}${suffix}`;
+      if (s.length <= 20) suggestions.push(s);
     }
 
-    // Ensure uniqueness and limit
     return [...new Set(suggestions)]
-      .filter(username => this.usernameRegex.test(username))
+      .filter((u) => this.usernameRegex.test(u))
       .slice(0, count);
+  }
+
+  // ─── Private helpers ───────────────────────────────────────────────────────
+
+  private containsInappropriateContent(username: string): boolean {
+    const patterns = [/fuck/i, /shit/i, /asshole/i, /bitch/i, /nigger/i, /cunt/i, /dick/i, /pussy/i, /whore/i, /slut/i];
+    return patterns.some((p) => p.test(username));
   }
 }

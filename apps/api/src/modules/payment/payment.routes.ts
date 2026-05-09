@@ -12,13 +12,13 @@ const paymentService = new PaymentService();
  */
 router.post('/create', authenticate, async (req, res) => {
   try {
-    const { receiverWallet, amount, sourceChain, destinationChain } = req.body;
+    const { receiverWallet, receiverUsername, amount, sourceChain, destinationChain } = req.body;
     const { walletAddress } = (req as any).user;
 
-    // senderWallet is always taken from the authenticated JWT (Req 3.9)
     const payment = await paymentService.createPaymentRequest({
       senderWallet: walletAddress,
       receiverWallet,
+      receiverUsername,
       amount,
       sourceChain,
       destinationChain,
@@ -58,10 +58,23 @@ router.get('/history', authenticate, async (req, res) => {
   try {
     const { walletAddress } = (req as any).user;
     const history = await paymentService.getPaymentHistory(walletAddress);
-
     res.json(history);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to get payment history' });
+  }
+});
+
+/**
+ * GET /payment/username/:username
+ * Get payments associated with a username (checks blockchain + DB).
+ */
+router.get('/username/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const payments = await paymentService.getPaymentsByUsername(username);
+    res.json(payments);
+  } catch {
+    res.status(500).json({ error: 'Failed to get payments' });
   }
 });
 
@@ -78,10 +91,7 @@ router.get('/:id', authenticate, async (req, res) => {
     const result = await paymentService.getPaymentByIdAuthorized(id, walletAddress);
 
     if (!result) {
-      return res.status(404).json({
-        error: 'Payment not found',
-        code: 'NOT_FOUND',
-      });
+      return res.status(404).json({ error: 'Payment not found', code: 'NOT_FOUND' });
     }
 
     if (!result.authorized) {
@@ -93,8 +103,40 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 
     res.json(result.payment);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to get payment', code: 'INTERNAL_ERROR' });
+  }
+});
+
+/**
+ * POST /payment/:id/cancel
+ * Cancel a pending payment. Requires authentication.
+ */
+router.post('/:id/cancel', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { walletAddress } = (req as any).user;
+
+    const payment = await paymentService.cancelPayment(id, walletAddress);
+    res.json(payment);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /payment/:id/sync
+ * Sync a payment's status from the blockchain. Requires authentication.
+ */
+router.post('/:id/sync', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username } = req.body;
+
+    const payment = await paymentService.syncPaymentFromBlockchain(username, id);
+    res.json(payment);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 });
 
