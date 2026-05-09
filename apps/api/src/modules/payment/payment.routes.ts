@@ -1,16 +1,23 @@
 import { Router } from 'express';
 import { PaymentService } from './payment.service';
+import { PaymentHistoryService } from './payment-history.service';
+import { AuditService } from './audit.service';
 import { authenticate } from '../../middleware/auth';
+import { validateBody, validateQuery } from '../../middleware/validation';
+import { createPaymentSchema, paginationSchema } from '../../middleware/schemas';
 
 const router = Router();
 const paymentService = new PaymentService();
+const paymentHistoryService = new PaymentHistoryService();
+const auditService = new AuditService();
 
 /**
  * POST /payment/create
  * Create a new payment request. Requires authentication.
  * senderWallet is always sourced from the JWT token (Requirement 3.9).
+ * Requirements: 12.6, 12.11, 12.12
  */
-router.post('/create', authenticate, async (req, res) => {
+router.post('/create', authenticate, validateBody(createPaymentSchema), async (req, res) => {
   try {
     const { receiverWallet, receiverUsername, amount, sourceChain, destinationChain } = req.body;
     const { walletAddress } = (req as any).user;
@@ -40,6 +47,7 @@ router.post('/create', authenticate, async (req, res) => {
 /**
  * GET /payment/route
  * Get cross-chain route from LI.FI. No authentication required.
+ * Requirements: 12.7
  */
 router.get('/route', async (req, res) => {
   try {
@@ -52,15 +60,32 @@ router.get('/route', async (req, res) => {
 
 /**
  * GET /payment/history
- * Get payment history for the authenticated user.
+ * Get paginated payment history for the authenticated user.
+ * Requirements: 12.8, 12.11, 12.12
  */
-router.get('/history', authenticate, async (req, res) => {
+router.get('/history', authenticate, validateQuery(paginationSchema), async (req, res) => {
   try {
     const { walletAddress } = (req as any).user;
-    const history = await paymentService.getPaymentHistory(walletAddress);
+    const query = req.query as any;
+
+    const options: {
+      page?: number;
+      limit?: number;
+      status?: any;
+      startDate?: Date;
+      endDate?: Date;
+    } = {};
+
+    if (query.page !== undefined) options.page = query.page;
+    if (query.limit !== undefined) options.limit = query.limit;
+    if (query.status !== undefined) options.status = query.status;
+    if (query.startDate !== undefined) options.startDate = new Date(query.startDate);
+    if (query.endDate !== undefined) options.endDate = new Date(query.endDate);
+
+    const history = await paymentHistoryService.getHistory(walletAddress, options);
     res.json(history);
   } catch {
-    res.status(500).json({ error: 'Failed to get payment history' });
+    res.status(500).json({ error: 'Failed to get payment history', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -82,6 +107,7 @@ router.get('/username/:username', async (req, res) => {
  * GET /payment/:id
  * Get a payment request by ID. Requires authentication.
  * Only the sender or receiver of the payment may access it (Requirement 5.5).
+ * Requirements: 12.9, 12.11, 12.12
  */
 router.get('/:id', authenticate, async (req, res) => {
   try {
@@ -121,6 +147,38 @@ router.post('/:id/cancel', authenticate, async (req, res) => {
     res.json(payment);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /payment/:id/audit
+ * Get the audit trail for a payment. Requires authentication.
+ * Requirements: 12.9
+ */
+router.get('/:id/audit', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { walletAddress } = (req as any).user;
+
+    // Authorization: only sender or receiver may view the audit trail
+    const result = await paymentService.getPaymentByIdAuthorized(id, walletAddress);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Payment not found', code: 'NOT_FOUND' });
+    }
+
+    if (!result.authorized) {
+      return res.status(403).json({
+        error: 'Access denied',
+        code: 'ACCESS_DENIED',
+        message: 'You do not have permission to view this payment audit trail',
+      });
+    }
+
+    const auditTrail = await auditService.getAuditTrail(id);
+    res.json(auditTrail);
+  } catch {
+    res.status(500).json({ error: 'Failed to get audit trail', code: 'INTERNAL_ERROR' });
   }
 });
 
