@@ -3,8 +3,10 @@ import { prisma } from '../../config/database';
 import { PaymentStatus } from '@ghost/shared-types';
 import axios from 'axios';
 import { SolanaPaymentService } from './solana.service';
+import { PaymentStateService, StateTransitionOptions } from './payment-state.service';
 
 const solanaPaymentService = new SolanaPaymentService();
+const paymentStateService = new PaymentStateService();
 
 const LIFI_API = 'https://li.quest/v1';
 
