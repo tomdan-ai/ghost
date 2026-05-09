@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { UsernameService } from './username.service';
-import { authMiddleware } from '../../middleware/auth';
+import { authenticate as authMiddleware } from '../../middleware/auth';
 
 const router = Router();
 const usernameService = new UsernameService();
