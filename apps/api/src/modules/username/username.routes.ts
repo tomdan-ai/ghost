@@ -1,10 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { UsernameService } from './username.service';
 import { authenticate as authMiddleware } from '../../middleware/auth';
+import { validateBody } from '../../middleware/validation';
+import { registerUsernameSchema } from '../../middleware/schemas';
 
 const router = Router();
 const usernameService = new UsernameService();
 
+/**
+ * GET /username/check/:username
+ * Check username availability. No authentication required.
+ * Response: { available: boolean, username: string }
+ * Requirements: 12.3, 12.11, 12.12
+ */
 router.get('/check/:username', async (req: Request, res: Response) => {
   try {
     const { username } = req.params;
@@ -23,19 +31,22 @@ router.get('/check/:username', async (req: Request, res: Response) => {
 
     return res.json({
       available: result.available,
-      cached: result.cached,
+      username: username.toLowerCase(),
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to check username', code: 'INTERNAL_ERROR' });
   }
 });
 
-router.post('/register', authMiddleware, async (req: Request, res: Response) => {
+/**
+ * POST /username/register
+ * Register a username for the authenticated wallet.
+ * Response: { success: boolean, username: string, walletAddress: string }
+ * Requirements: 12.4, 12.11, 12.12
+ */
+router.post('/register', authMiddleware, validateBody(registerUsernameSchema), async (req: Request, res: Response) => {
   try {
-    const { username } = req.body as { username?: string };
-    if (!username) {
-      return res.status(400).json({ error: 'Username is required', code: 'VALIDATION_ERROR' });
-    }
+    const { username } = req.body as { username: string };
 
     const user = (req as any).user as { id: string; walletAddress: string };
     const { walletAddress, id: userId } = user;
@@ -53,13 +64,24 @@ router.post('/register', authMiddleware, async (req: Request, res: Response) => 
       });
     }
 
-    return res.status(201).json(result.registry);
+    // Return spec-compliant response format
+    return res.status(201).json({
+      success: true,
+      username: result.registry?.username ?? username.toLowerCase(),
+      walletAddress,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Registration failed';
     return res.status(400).json({ error: message, code: 'REGISTRATION_ERROR' });
   }
 });
 
+/**
+ * GET /username/resolve/:username
+ * Resolve a username to its wallet address. No authentication required.
+ * Response: { username: string, walletAddress: string, createdAt: string }
+ * Requirements: 12.5, 12.11, 12.12
+ */
 router.get('/resolve/:username', async (req: Request, res: Response) => {
   try {
     const { username } = req.params;
@@ -69,11 +91,20 @@ router.get('/resolve/:username', async (req: Request, res: Response) => {
 
     const result = await usernameService.resolve(username);
 
-    if (!result.found) {
+    if (!result.found || !result.data) {
       return res.status(404).json({ error: 'Username not found', code: 'NOT_FOUND' });
     }
 
-    return res.json(result.data);
+    const data = result.data;
+
+    // Return spec-compliant response format
+    return res.json({
+      username: data.username ?? username.toLowerCase(),
+      walletAddress: data.walletAddress ?? data.user?.walletAddress,
+      createdAt: data.createdAt instanceof Date
+        ? data.createdAt.toISOString()
+        : String(data.createdAt),
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to resolve username', code: 'INTERNAL_ERROR' });
   }

@@ -8,7 +8,7 @@ export interface ParsedPaymentRequest {
   amount: string;
   sourceChain: string;
   destinationChain: string;
-  receiverUsername?: string;
+  receiverUsername?: string | undefined;
 }
 
 export interface ParsedRouteRequest {

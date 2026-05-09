@@ -5,11 +5,16 @@ import { AuditService } from './audit.service';
 import { authenticate } from '../../middleware/auth';
 import { validateBody, validateQuery } from '../../middleware/validation';
 import { createPaymentSchema, paginationSchema } from '../../middleware/schemas';
+import { ZodSchema } from 'zod';
 
 const router = Router();
 const paymentService = new PaymentService();
 const paymentHistoryService = new PaymentHistoryService();
 const auditService = new AuditService();
+
+// Cast paginationSchema to ZodSchema<any> to avoid the input/output type mismatch
+// caused by Zod transforms (string → number). The middleware still validates correctly.
+const paginationSchemaAny = paginationSchema as unknown as ZodSchema<any>;
 
 /**
  * POST /payment/create
@@ -31,7 +36,7 @@ router.post('/create', authenticate, validateBody(createPaymentSchema), async (r
       destinationChain,
     });
 
-    res.status(201).json(payment);
+    return res.status(201).json(payment);
   } catch (error: any) {
     if (error.code === 'VALIDATION_ERROR') {
       return res.status(400).json({
@@ -40,7 +45,7 @@ router.post('/create', authenticate, validateBody(createPaymentSchema), async (r
         details: { errors: error.validationErrors },
       });
     }
-    res.status(500).json({ error: 'Failed to create payment', code: 'INTERNAL_ERROR' });
+    return res.status(500).json({ error: 'Failed to create payment', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -63,7 +68,7 @@ router.get('/route', async (req, res) => {
  * Get paginated payment history for the authenticated user.
  * Requirements: 12.8, 12.11, 12.12
  */
-router.get('/history', authenticate, validateQuery(paginationSchema), async (req, res) => {
+router.get('/history', authenticate, validateQuery(paginationSchemaAny), async (req, res) => {
   try {
     const { walletAddress } = (req as any).user;
     const query = req.query as any;
@@ -111,7 +116,10 @@ router.get('/username/:username', async (req, res) => {
  */
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params['id'];
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required', code: 'VALIDATION_ERROR' });
+    }
     const { walletAddress } = (req as any).user;
 
     const result = await paymentService.getPaymentByIdAuthorized(id, walletAddress);
@@ -128,9 +136,9 @@ router.get('/:id', authenticate, async (req, res) => {
       });
     }
 
-    res.json(result.payment);
+    return res.json(result.payment);
   } catch {
-    res.status(500).json({ error: 'Failed to get payment', code: 'INTERNAL_ERROR' });
+    return res.status(500).json({ error: 'Failed to get payment', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -140,13 +148,16 @@ router.get('/:id', authenticate, async (req, res) => {
  */
 router.post('/:id/cancel', authenticate, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params['id'];
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required', code: 'VALIDATION_ERROR' });
+    }
     const { walletAddress } = (req as any).user;
 
     const payment = await paymentService.cancelPayment(id, walletAddress);
-    res.json(payment);
+    return res.json(payment);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: error.message });
   }
 });
 
@@ -157,7 +168,10 @@ router.post('/:id/cancel', authenticate, async (req, res) => {
  */
 router.get('/:id/audit', authenticate, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params['id'];
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required', code: 'VALIDATION_ERROR' });
+    }
     const { walletAddress } = (req as any).user;
 
     // Authorization: only sender or receiver may view the audit trail
@@ -176,9 +190,9 @@ router.get('/:id/audit', authenticate, async (req, res) => {
     }
 
     const auditTrail = await auditService.getAuditTrail(id);
-    res.json(auditTrail);
+    return res.json(auditTrail);
   } catch {
-    res.status(500).json({ error: 'Failed to get audit trail', code: 'INTERNAL_ERROR' });
+    return res.status(500).json({ error: 'Failed to get audit trail', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -188,13 +202,16 @@ router.get('/:id/audit', authenticate, async (req, res) => {
  */
 router.post('/:id/sync', authenticate, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params['id'];
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required', code: 'VALIDATION_ERROR' });
+    }
     const { username } = req.body;
 
     const payment = await paymentService.syncPaymentFromBlockchain(username, id);
-    res.json(payment);
+    return res.json(payment);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: error.message });
   }
 });
 

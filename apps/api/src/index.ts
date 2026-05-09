@@ -2,13 +2,15 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
-import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { prisma, connectDatabase } from './config/database';
 import { connectRedis, cacheService } from './config/redis';
 import { config } from './config/env';
+import { logger } from './config/logger';
+import { corsMiddleware, securityHeadersMiddleware, contentTypeValidation } from './middleware/security';
 import { rateLimitMiddleware, authRateLimitMiddleware } from './middleware/rateLimit';
+import { globalErrorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import paymentRoutes from './routes/payments';
@@ -22,10 +24,14 @@ const io = new Server(httpServer, {
   },
 });
 
-app.use(cors({
-  origin: config.server.corsOrigin,
-  credentials: true,
-}));
+// Request logging — attach requestId and log every request/response.
+app.use(logger.requestLogger);
+
+// Security middleware.
+app.use(corsMiddleware);
+app.use(securityHeadersMiddleware);
+app.use(contentTypeValidation);
+
 app.use(express.json({ limit: '1mb' }));
 
 // Add cache service to request object
@@ -113,6 +119,9 @@ io.on('connection', (socket) => {
 
 // Make io available globally
 app.set('io', io);
+
+// Global error handler — must be the last middleware registered (Requirements 8.7–8.9).
+app.use(globalErrorHandler);
 
 // Connect to database and start server
 async function startServer() {
