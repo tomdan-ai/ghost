@@ -22,6 +22,9 @@ import { PaymentStatus } from '@ghost/shared-types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** No-op sleep for tests — avoids real timer delays in retry logic. */
+const noopSleep = jest.fn().mockResolvedValue(undefined);
+
 function makePaymentRecord(status: PaymentStatus, overrides: Partial<any> = {}) {
   return {
     id: 'payment-uuid-1234',
@@ -44,14 +47,9 @@ describe('PaymentStateService', () => {
   let service: PaymentStateService;
 
   beforeEach(() => {
-    service = new PaymentStateService();
+    // Inject no-op sleep to avoid real delays in retry tests
+    service = new PaymentStateService(noopSleep);
     jest.clearAllMocks();
-    // Use fake timers to avoid real delays in retry logic
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
   });
 
   // ─── isValidTransition ─────────────────────────────────────────────────────
@@ -442,15 +440,23 @@ describe('PaymentStateService', () => {
         .mockResolvedValueOnce({ count: 0 })
         .mockResolvedValueOnce({ count: 1 });
 
-      // Run the transition and advance fake timers to resolve the sleep
-      const transitionPromise = service.transition('payment-uuid-1234', PaymentStatus.PROCESSING);
-      // Advance all timers to resolve the sleep(100ms) in retry
-      jest.runAllTimers();
-
-      const result = await transitionPromise;
+      const result = await service.transition('payment-uuid-1234', PaymentStatus.PROCESSING);
 
       expect(mockUpdateMany).toHaveBeenCalledTimes(2);
       expect(result.newStatus).toBe(PaymentStatus.PROCESSING);
+    });
+
+    it('calls sleep with exponential backoff delay on retry (Requirement 17.9)', async () => {
+      const payment = makePaymentRecord(PaymentStatus.PENDING);
+      mockFindUnique.mockResolvedValue(payment);
+      mockUpdateMany
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 1 });
+
+      await service.transition('payment-uuid-1234', PaymentStatus.PROCESSING);
+
+      // First retry: delay = 100ms * 2^0 = 100ms
+      expect(noopSleep).toHaveBeenCalledWith(100);
     });
 
     it('throws CONCURRENT_TRANSITION after exhausting all retries', async () => {
@@ -459,11 +465,9 @@ describe('PaymentStateService', () => {
       // All attempts return count=0
       mockUpdateMany.mockResolvedValue({ count: 0 });
 
-      const transitionPromise = service.transition('payment-uuid-1234', PaymentStatus.PROCESSING);
-      // Advance all timers to resolve all sleep() calls in retries
-      jest.runAllTimers();
-
-      await expect(transitionPromise).rejects.toMatchObject({ code: 'CONCURRENT_TRANSITION' });
+      await expect(
+        service.transition('payment-uuid-1234', PaymentStatus.PROCESSING)
+      ).rejects.toMatchObject({ code: 'CONCURRENT_TRANSITION' });
     });
 
     it('includes paymentId in CONCURRENT_TRANSITION error', async () => {
@@ -471,17 +475,29 @@ describe('PaymentStateService', () => {
       mockFindUnique.mockResolvedValue(payment);
       mockUpdateMany.mockResolvedValue({ count: 0 });
 
-      const transitionPromise = service.transition('payment-uuid-1234', PaymentStatus.PROCESSING);
-      jest.runAllTimers();
-
       let thrownError: any;
       try {
-        await transitionPromise;
+        await service.transition('payment-uuid-1234', PaymentStatus.PROCESSING);
       } catch (err) {
         thrownError = err;
       }
 
       expect(thrownError.paymentId).toBe('payment-uuid-1234');
+    });
+
+    it('makes exactly RETRY_MAX_ATTEMPTS update attempts before giving up', async () => {
+      const payment = makePaymentRecord(PaymentStatus.PENDING);
+      mockFindUnique.mockResolvedValue(payment);
+      mockUpdateMany.mockResolvedValue({ count: 0 });
+
+      try {
+        await service.transition('payment-uuid-1234', PaymentStatus.PROCESSING);
+      } catch {
+        // expected
+      }
+
+      // Should have tried RETRY_MAX_ATTEMPTS (3) times
+      expect(mockUpdateMany).toHaveBeenCalledTimes(3);
     });
   });
 });
