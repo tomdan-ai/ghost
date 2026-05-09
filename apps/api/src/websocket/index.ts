@@ -4,6 +4,9 @@ import { AuthService } from '../modules/auth/auth.service';
 import { prisma } from '../config/database';
 import { config } from '../config/env';
 
+// Re-export event helpers so callers can import from a single location
+export { emitPaymentStatusUpdate, emitWalletUpdate, emitPaymentCreated } from './events';
+
 const authService = new AuthService();
 
 export interface AuthenticatedSocket extends Socket {
@@ -105,11 +108,59 @@ export function setupWebSocket(httpServer: HttpServer) {
     const user = (socket as AuthenticatedSocket).data.user;
     console.log(`Client connected: ${socket.id} (wallet: ${user.walletAddress.slice(0, 8)}...)`);
 
-    socket.on('subscribe:payment', (paymentId: string) => {
-      socket.join(`payment:${paymentId}`);
+    /**
+     * subscribe:user — join the user's personal notification room.
+     * Users may only subscribe to their own user room (Requirement 6.2).
+     */
+    socket.on('subscribe:user', (userId: string) => {
+      if (userId !== user.id) {
+        socket.emit('error', { message: 'Unauthorized: cannot subscribe to another user\'s room' });
+        return;
+      }
+      socket.join(`user:${userId}`);
     });
 
+    /**
+     * subscribe:payment — validate ownership then join the payment room.
+     * Only the sender or receiver of the payment may subscribe (Requirement 6.2).
+     */
+    socket.on('subscribe:payment', async (paymentId: string) => {
+      try {
+        const payment = await prisma.paymentRequest.findUnique({
+          where: { id: paymentId },
+          select: { senderWallet: true, receiverWallet: true },
+        });
+
+        if (!payment) {
+          socket.emit('error', { message: 'Payment not found' });
+          return;
+        }
+
+        const isAuthorized =
+          payment.senderWallet === user.walletAddress ||
+          payment.receiverWallet === user.walletAddress;
+
+        if (!isAuthorized) {
+          socket.emit('error', { message: 'Unauthorized: you are not a participant in this payment' });
+          return;
+        }
+
+        socket.join(`payment:${paymentId}`);
+      } catch (error) {
+        console.error('subscribe:payment error:', error);
+        socket.emit('error', { message: 'Failed to subscribe to payment' });
+      }
+    });
+
+    /**
+     * subscribe:wallet — validate ownership then join the wallet room.
+     * Users may only subscribe to their own wallet address (Requirement 6.2).
+     */
     socket.on('subscribe:wallet', (walletAddress: string) => {
+      if (walletAddress !== user.walletAddress) {
+        socket.emit('error', { message: 'Unauthorized: cannot subscribe to another wallet' });
+        return;
+      }
       socket.join(`wallet:${walletAddress}`);
     });
 
@@ -121,18 +172,14 @@ export function setupWebSocket(httpServer: HttpServer) {
   return io;
 }
 
+/**
+ * @deprecated Use emitPaymentStatusUpdate from ./events instead.
+ * Kept for backwards compatibility with existing callers.
+ */
 export function emitPaymentUpdate(
   io: Server,
   paymentId: string,
   data: unknown
 ) {
   io.to(`payment:${paymentId}`).emit('payment:update', data);
-}
-
-export function emitWalletUpdate(
-  io: Server,
-  walletAddress: string,
-  data: unknown
-) {
-  io.to(`wallet:${walletAddress}`).emit('wallet:update', data);
 }
