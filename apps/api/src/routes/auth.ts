@@ -1,27 +1,29 @@
 import { Router } from 'express';
 import { AuthService } from '../modules/auth/auth.service';
 import { prisma } from '../config/database';
+import { logger } from '../config/logger';
+import { validateBody } from '../middleware/validation';
+import { nonceRequestSchema, verifySignatureSchema } from '../middleware/schemas';
 
 const router = Router();
 const authService = new AuthService();
 
 // Generate nonce for wallet signature
-router.post('/nonce', async (req, res) => {
+// validateBody ensures walletAddress is present and valid (Requirements 12.1, 12.11, 12.12)
+router.post('/nonce', validateBody(nonceRequestSchema), async (req, res) => {
   try {
-    const { walletAddress } = req.body;
-
-    if (!walletAddress) {
-      return res.status(400).json({
-        error: 'Wallet address required',
-        code: 'VALIDATION_ERROR',
-        details: { field: 'walletAddress' },
-      });
-    }
+    const { walletAddress } = req.body as { walletAddress: string };
 
     // Generate nonce
     const nonce = await authService.generateNonce(walletAddress);
     const message = `Sign this message to authenticate with Ghost Wallet.\n\nNonce: ${nonce}`;
 
+    logger.info('Auth nonce generated', {
+      requestId: (req as any).requestId,
+      walletAddress,
+    });
+
+    // Response format: { nonce, message, expiresIn, walletAddress } (Requirement 12.1)
     res.json({
       nonce,
       message,
@@ -31,13 +33,11 @@ router.post('/nonce', async (req, res) => {
   } catch (error) {
     console.error('Nonce generation error:', error);
     
-    if (error instanceof Error && error.message.includes('Invalid wallet address')) {
-      return res.status(400).json({
-        error: 'Invalid wallet address format',
-        code: 'INVALID_WALLET_ADDRESS',
-        message: 'Please provide a valid Solana or Ethereum wallet address',
-      });
-    }
+    logger.error('Auth nonce generation failed', {
+      requestId: (req as any).requestId,
+      walletAddress: req.body?.walletAddress,
+      error: error instanceof Error ? error.message : String(error),
+    });
 
     res.status(500).json({
       error: 'Failed to generate nonce',
@@ -48,28 +48,23 @@ router.post('/nonce', async (req, res) => {
 });
 
 // Verify wallet signature and authenticate
-router.post('/verify', async (req, res) => {
+// validateBody ensures walletAddress, signature, and nonce are present and valid (Requirements 12.2, 12.11, 12.12)
+router.post('/verify', validateBody(verifySignatureSchema), async (req, res) => {
   try {
-    const { walletAddress, signature, message } = req.body;
+    const { walletAddress, signature, nonce } = req.body as {
+      walletAddress: string;
+      signature: string;
+      nonce: string;
+    };
 
-    // Validate required fields
-    if (!walletAddress || !signature || !message) {
-      const missingFields = [];
-      if (!walletAddress) missingFields.push('walletAddress');
-      if (!signature) missingFields.push('signature');
-      if (!message) missingFields.push('message');
-
-      return res.status(400).json({
-        error: 'Missing required fields',
-        code: 'VALIDATION_ERROR',
-        details: { missingFields },
-      });
-    }
-
-    // Verify signature
-    const isValid = await authService.verifySignature(walletAddress, signature, message);
+    // Verify signature — the nonce is passed as the "message" parameter
+    const isValid = await authService.verifySignature(walletAddress, signature, nonce);
     
     if (!isValid) {
+      logger.warn('Auth verification failed — invalid signature', {
+        requestId: (req as any).requestId,
+        walletAddress,
+      });
       return res.status(401).json({
         error: 'Authentication failed',
         code: 'AUTHENTICATION_FAILED',
@@ -106,6 +101,14 @@ router.post('/verify', async (req, res) => {
     // Generate JWT token
     const token = authService.generateToken(walletAddress, user.username);
 
+    logger.info('Auth verification successful', {
+      requestId: (req as any).requestId,
+      walletAddress,
+      userId: user.id,
+      isNewUser: !user.createdAt || (Date.now() - new Date(user.createdAt).getTime() < 5000),
+    });
+
+    // Response format: { token, user, expiresIn } (Requirement 12.2)
     res.json({
       token,
       user: {
@@ -118,6 +121,12 @@ router.post('/verify', async (req, res) => {
     });
   } catch (error) {
     console.error('Verification error:', error);
+    
+    logger.error('Auth verification error', {
+      requestId: (req as any).requestId,
+      walletAddress: req.body?.walletAddress,
+      error: error instanceof Error ? error.message : String(error),
+    });
     
     if (error instanceof Error) {
       // Handle specific Prisma errors
