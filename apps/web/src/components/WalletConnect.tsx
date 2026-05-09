@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 export default function WalletConnect() {
   const [connected, setConnected] = useState(false);
-  const [address, setAddress] = useState('');
+  const [address] = useState('');
 
   const handleConnect = async () => {
     // Wallet connection logic
