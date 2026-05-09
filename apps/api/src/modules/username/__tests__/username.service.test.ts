@@ -50,6 +50,26 @@ jest.mock('../../../config/redis', () => ({
   },
 }));
 
+// Mock the Solana service to avoid blockchain dependencies in unit tests
+const mockCheckUsernameOnChain = jest.fn();
+const mockRegisterUsername = jest.fn();
+const mockGetUsernameRegistry = jest.fn();
+const mockGetUsernamesByWallet = jest.fn();
+
+jest.mock('../solana.service', () => ({
+  SolanaUsernameService: jest.fn().mockImplementation(() => ({
+    checkUsernameOnChain: (...args: unknown[]) => mockCheckUsernameOnChain(...args),
+    registerUsername: (...args: unknown[]) => mockRegisterUsername(...args),
+    getUsernameRegistry: (...args: unknown[]) => mockGetUsernameRegistry(...args),
+    getUsernamesByWallet: (...args: unknown[]) => mockGetUsernamesByWallet(...args),
+  })),
+}));
+
+// Mock @solana/web3.js PublicKey to avoid invalid address errors in unit tests
+jest.mock('@solana/web3.js', () => ({
+  PublicKey: jest.fn().mockImplementation((address: string) => ({ toBase58: () => address })),
+}));
+
 import { UsernameService } from '../username.service';
 
 describe('UsernameService', () => {
@@ -66,6 +86,13 @@ describe('UsernameService', () => {
     mockCacheDelete.mockResolvedValue(undefined);
     mockInvalidateUserProfile.mockResolvedValue(undefined);
     mockInvalidateUserCaches.mockResolvedValue(undefined);
+    // Default: username not on chain (available)
+    mockCheckUsernameOnChain.mockResolvedValue(false);
+    // Default: registration succeeds on chain
+    mockRegisterUsername.mockResolvedValue({ signature: 'mock-tx-sig', registryPDA: 'mock-pda' });
+    // Default: no chain data
+    mockGetUsernameRegistry.mockResolvedValue(null);
+    mockGetUsernamesByWallet.mockResolvedValue([]);
   });
 
   // ─── validateUsername ────────────────────────────────────────────────────────
