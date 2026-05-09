@@ -62,23 +62,34 @@ export class PaymentHistoryService {
       ...dateFilter,
     };
 
-    const [data, total] = await Promise.all([
-      prisma.paymentRequest.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.paymentRequest.count({ where }),
-    ]);
+    try {
+      const [data, total] = await Promise.all([
+        prisma.paymentRequest.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        prisma.paymentRequest.count({ where }),
+      ]);
 
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+      return {
+        data,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      console.error('Payment history DB lookup failed:', error);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+      };
+    }
   }
 
   /**
@@ -89,16 +100,21 @@ export class PaymentHistoryService {
     walletAddress: string,
     status: PaymentStatus
   ): Promise<any[]> {
-    return prisma.paymentRequest.findMany({
-      where: {
-        OR: [
-          { senderWallet: walletAddress },
-          { receiverWallet: walletAddress },
-        ],
-        status,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    try {
+      return await prisma.paymentRequest.findMany({
+        where: {
+          OR: [
+            { senderWallet: walletAddress },
+            { receiverWallet: walletAddress },
+          ],
+          status,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      console.error('Payment status lookup failed:', error);
+      return [];
+    }
   }
 
   /**
@@ -106,15 +122,20 @@ export class PaymentHistoryService {
    * Defaults to 10 if limit is not provided. Requirement 7.2.
    */
   async getRecentPayments(walletAddress: string, limit: number = 10): Promise<any[]> {
-    return prisma.paymentRequest.findMany({
-      where: {
-        OR: [
-          { senderWallet: walletAddress },
-          { receiverWallet: walletAddress },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
+    try {
+      return await prisma.paymentRequest.findMany({
+        where: {
+          OR: [
+            { senderWallet: walletAddress },
+            { receiverWallet: walletAddress },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
+    } catch (error) {
+      console.error('Recent payments lookup failed:', error);
+      return [];
+    }
   }
 }

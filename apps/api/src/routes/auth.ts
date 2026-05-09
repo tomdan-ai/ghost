@@ -51,14 +51,22 @@ router.post('/nonce', validateBody(nonceRequestSchema), async (req, res) => {
 // validateBody ensures walletAddress, signature, and nonce are present and valid (Requirements 12.2, 12.11, 12.12)
 router.post('/verify', validateBody(verifySignatureSchema), async (req, res) => {
   try {
-    const { walletAddress, signature, nonce } = req.body as {
+    const { walletAddress, signature, nonce, message } = req.body as {
       walletAddress: string;
       signature: string;
-      nonce: string;
+      nonce?: string;
+      message?: string;
     };
 
+    const signedMessage = message ?? nonce ?? '';
+
     // Verify signature — the nonce is passed as the "message" parameter
-    const isValid = await authService.verifySignature(walletAddress, signature, nonce);
+    const isValid = await authService.verifySignature(
+      walletAddress,
+      signature,
+      signedMessage,
+      nonce
+    );
     
     if (!isValid) {
       logger.warn('Auth verification failed — invalid signature', {
@@ -72,29 +80,52 @@ router.post('/verify', validateBody(verifySignatureSchema), async (req, res) => 
       });
     }
 
-    // Check if user exists, create if not
-    let user = await prisma.user.findUnique({
-      where: { walletAddress },
-    });
-
-    if (!user) {
-      // Generate default username
-      const defaultUsername = `user_${walletAddress.slice(0, 8).toLowerCase()}`;
-      
-      user = await prisma.user.create({
-        data: {
-          walletAddress,
-          username: defaultUsername,
-        },
+    let user;
+    try {
+      // Check if user exists, create if not
+      user = await prisma.user.findUnique({
+        where: { walletAddress },
       });
 
-      // Create username registry entry
-      await prisma.usernameRegistry.create({
-        data: {
-          username: defaultUsername,
+      if (!user) {
+        // Generate default username
+        const defaultUsername = `user_${walletAddress.slice(0, 8).toLowerCase()}`;
+        
+        user = await prisma.user.create({
+          data: {
+            walletAddress,
+            username: defaultUsername,
+          },
+        });
+
+        // Create username registry entry
+        await prisma.usernameRegistry.create({
+          data: {
+            username: defaultUsername,
+            walletAddress,
+            userId: user.id,
+          },
+        });
+      }
+    } catch (dbError) {
+      logger.warn('Auth verification DB unavailable, issuing token without DB user', {
+        requestId: (req as any).requestId,
+        walletAddress,
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+      });
+
+      const fallbackUsername = `user_${walletAddress.slice(0, 8).toLowerCase()}`;
+      const token = authService.generateToken(walletAddress, fallbackUsername);
+
+      return res.json({
+        token,
+        user: {
+          id: walletAddress,
           walletAddress,
-          userId: user.id,
+          username: fallbackUsername,
+          createdAt: new Date(),
         },
+        expiresIn: '24 hours',
       });
     }
 

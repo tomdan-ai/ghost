@@ -1,17 +1,17 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { X, Check, ExternalLink, Loader2, Link as LinkIcon, History, RefreshCcw, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { PaymentStatus, type PaymentRequest } from '@ghost/shared-types';
 import { useWebSocket } from '@/components/WebSocketProvider';
+import HeaderWallet from '@/components/HeaderWallet';
 
 export default function TransactionPage() {
   const params = useParams();
-  const router = useRouter();
   const id = params.id as string;
   const { socket } = useWebSocket();
   
@@ -114,7 +114,6 @@ export default function TransactionPage() {
   }
 
   const isCompleted = payment.status === PaymentStatus.COMPLETED;
-  const isFailed = payment.status === PaymentStatus.FAILED;
   const isProcessing = payment.status === PaymentStatus.PROCESSING;
 
   return (
@@ -122,8 +121,9 @@ export default function TransactionPage() {
       
       {/* Header */}
       <header className="flex justify-between items-center w-full px-8 py-8 mt-4">
-        <div className="text-2xl font-black tracking-tighter uppercase leading-none">GHOST</div>
+        <Link href="/" className="text-2xl font-black tracking-tighter uppercase leading-none hover:opacity-80 transition-opacity">GHOST</Link>
         <div className="flex items-center gap-4">
+          <HeaderWallet />
           <button 
             onClick={handleSync}
             disabled={isSyncing || isCompleted}

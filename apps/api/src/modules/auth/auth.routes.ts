@@ -23,12 +23,15 @@ router.post('/nonce', async (req, res) => {
 
 router.post('/verify', async (req, res) => {
   try {
-    const { walletAddress, signature, message } = req.body;
+    const { walletAddress, signature, message, nonce } = req.body;
 
-    const isValid = authService.verifySignature(
+    const signedMessage = message ?? nonce ?? '';
+
+    const isValid = await authService.verifySignature(
       walletAddress,
       signature,
-      message
+      signedMessage,
+      nonce
     );
 
     if (!isValid) {

@@ -31,32 +31,47 @@ export class AuthService {
       createdAt: Date.now(),
     };
 
-    const cacheKey = `nonce:${walletAddress}`;
+    const cacheKey = `nonce:${walletAddress}:${nonce}`;
+    const latestKey = `nonce:${walletAddress}`;
     await cacheService.set(cacheKey, nonceData, this.nonceTtlMs);
+    await cacheService.set(latestKey, nonceData, this.nonceTtlMs);
 
     return nonce;
   }
 
   // Get stored nonce for verification
-  async getStoredNonce(walletAddress: string): Promise<{
+  async getStoredNonce(
+    walletAddress: string,
+    nonce?: string
+  ): Promise<{
     nonce: string;
     walletAddress: string;
     expiresAt: number;
     createdAt: number;
   } | null> {
-    const cacheKey = `nonce:${walletAddress}`;
-    return cacheService.get(cacheKey);
+    if (nonce) {
+      const keyed = await cacheService.get(`nonce:${walletAddress}:${nonce}`);
+      if (keyed) {
+        return keyed;
+      }
+    }
+
+    return cacheService.get(`nonce:${walletAddress}`);
   }
 
   // Verify signature and nonce
   async verifySignature(
     walletAddress: string,
     signature: string,
-    message: string
+    signedMessage: string,
+    nonce?: string
   ): Promise<boolean> {
     try {
+      const resolvedNonce =
+        nonce || this.extractNonceFromMessage(signedMessage) || signedMessage;
+
       // Get stored nonce
-      const storedNonce = await this.getStoredNonce(walletAddress);
+      const storedNonce = await this.getStoredNonce(walletAddress, resolvedNonce);
       
       if (!storedNonce) {
         console.warn(`No nonce found for wallet: ${walletAddress}`);
@@ -71,7 +86,7 @@ export class AuthService {
       }
 
       // Verify the message matches the stored nonce
-      if (storedNonce.nonce !== message) {
+      if (storedNonce.nonce !== resolvedNonce) {
         console.warn(`Nonce mismatch for wallet: ${walletAddress}`);
         return false;
       }
@@ -86,9 +101,17 @@ export class AuthService {
       let isValidSignature = false;
       
       if (this.isSolanaAddress(walletAddress)) {
-        isValidSignature = await this.verifySolanaSignature(walletAddress, signature, message);
+        isValidSignature = await this.verifySolanaSignature(
+          walletAddress,
+          signature,
+          signedMessage
+        );
       } else if (this.isEthereumAddress(walletAddress)) {
-        isValidSignature = await this.verifyEthereumSignature(walletAddress, signature, message);
+        isValidSignature = await this.verifyEthereumSignature(
+          walletAddress,
+          signature,
+          signedMessage
+        );
       } else {
         console.warn(`Unsupported wallet address type: ${walletAddress}`);
         return false;
@@ -100,7 +123,7 @@ export class AuthService {
       }
 
       // Invalidate nonce after successful verification (prevent replay)
-      await this.invalidateNonce(walletAddress);
+      await this.invalidateNonce(walletAddress, resolvedNonce);
 
       // Log successful verification for audit
       await this.logSignatureVerification(walletAddress, true);
@@ -116,10 +139,28 @@ export class AuthService {
     }
   }
 
+  private extractNonceFromMessage(message: string): string | null {
+    if (!message) return null;
+    const match = message.match(/Nonce:\s*([a-f0-9]{64})/i);
+    return match?.[1] ?? null;
+  }
+
   // Invalidate nonce (prevent reuse)
-  async invalidateNonce(walletAddress: string): Promise<void> {
-    const cacheKey = `nonce:${walletAddress}`;
+  async invalidateNonce(walletAddress: string, nonce?: string): Promise<void> {
+    const latestKey = `nonce:${walletAddress}`;
+
+    if (!nonce) {
+      await cacheService.delete(latestKey);
+      return;
+    }
+
+    const cacheKey = `nonce:${walletAddress}:${nonce}`;
     await cacheService.delete(cacheKey);
+
+    const latest = await cacheService.get<{ nonce: string }>(latestKey);
+    if (latest?.nonce === nonce) {
+      await cacheService.delete(latestKey);
+    }
   }
 
   // Generate JWT token for authenticated user

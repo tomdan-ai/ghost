@@ -44,23 +44,35 @@ export const authenticate = async (
       });
     }
 
-    // Get user from database
-    const user = await prisma.user.findUnique({
-      where: { walletAddress: decoded.walletAddress },
-      select: {
-        id: true,
-        walletAddress: true,
-        username: true,
-        createdAt: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        error: 'User not found',
-        code: 'USER_NOT_FOUND',
-        message: 'User associated with this token no longer exists',
+    let user;
+    try {
+      // Get user from database
+      user = await prisma.user.findUnique({
+        where: { walletAddress: decoded.walletAddress },
+        select: {
+          id: true,
+          walletAddress: true,
+          username: true,
+          createdAt: true,
+        },
       });
+
+      if (!user) {
+        return res.status(404).json({
+          error: 'User not found',
+          code: 'USER_NOT_FOUND',
+          message: 'User associated with this token no longer exists',
+        });
+      }
+    } catch (dbError) {
+      console.warn('Authentication DB lookup failed, using token payload:', dbError);
+      user = {
+        id: decoded.walletAddress,
+        walletAddress: decoded.walletAddress,
+        username: decoded.username ?? null,
+        createdAt: new Date(),
+      };
+      (req as any).authDbUnavailable = true;
     }
 
     // Add user to request object

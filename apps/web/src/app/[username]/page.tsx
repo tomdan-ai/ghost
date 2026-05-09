@@ -9,25 +9,25 @@ export default function ProfilePage() {
   const username = params.username as string;
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-surface-base flex items-center justify-center p-4">
-      <div className="border border-border bg-surface-base p-8 max-w-md w-full text-center rounded-xs">
-        <div className="w-24 h-24 bg-text-inverse rounded-full mx-auto mb-4 flex items-center justify-center text-surface-base text-xl font-normal">
+    <div className="min-h-screen bg-[#F5F5E8] flex items-center justify-center p-4">
+      <div className="border-2 border-[#000000] bg-[#F5F5E8] p-8 max-w-md w-full text-center rounded-2xl">
+        <div className="w-24 h-24 bg-[#000000] rounded-full mx-auto mb-4 flex items-center justify-center text-[#F5F5E8] text-3xl font-black">
           {username?.[0]?.toUpperCase() || 'G'}
         </div>
 
-        <h1 className="text-xl sm:text-2xl font-normal text-text-inverse mb-2 tracking-tight">
+        <h1 className="text-2xl font-black text-[#000000] mb-2 tracking-tighter uppercase">
           @{username}
         </h1>
-        <p className="text-base text-text-secondary mb-8">Ghost Wallet User</p>
+        <p className="text-sm text-[#5f5e5e] mb-8 uppercase font-bold tracking-widest">Ghost Wallet User</p>
 
-        <Button asChild size="lg" className="w-full rounded-xs bg-text-inverse text-surface-base hover:bg-[var(--text-tertiary)] hover:text-text-inverse border border-transparent transition-colors">
+        <Button asChild size="lg" className="w-full rounded-full bg-[#000000] text-[#F5F5E8] hover:opacity-90 border-2 border-[#000000] transition-all font-black uppercase tracking-widest active:scale-95">
           <Link href={`/pay/${username}`}>
             Send Payment
           </Link>
         </Button>
 
-        <div className="mt-8 pt-6 border-t border-border">
-          <p className="text-sm text-text-secondary">
+        <div className="mt-8 pt-6 border-t-2 border-[#000000]/10">
+          <p className="text-sm text-[#5f5e5e]">
             Accepts payments natively from any EVM chain or Solana.
           </p>
         </div>

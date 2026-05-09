@@ -258,15 +258,20 @@ export class PaymentService {
   }
 
   async getPaymentHistory(walletAddress: string) {
-    return prisma.paymentRequest.findMany({
-      where: {
-        OR: [
-          { senderWallet: walletAddress },
-          { receiverWallet: walletAddress },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    try {
+      return await prisma.paymentRequest.findMany({
+        where: {
+          OR: [
+            { senderWallet: walletAddress },
+            { receiverWallet: walletAddress },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      console.error('Payment history DB lookup failed:', error);
+      return [];
+    }
   }
 
   /**

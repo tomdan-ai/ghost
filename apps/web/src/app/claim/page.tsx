@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, Settings, CheckCircle, ArrowRight, User, Loader2, AlertCircle } from 'lucide-react';
+import { Wallet, Settings, CheckCircle, ArrowRight, User, Loader2, AlertCircle, ArrowLeftRight, History as HistoryIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { useWalletStore } from '@/stores/wallet-store';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/hooks/use-debounce';
+import HeaderWallet from '@/components/HeaderWallet';
 
 export default function ClaimPage() {
   const [username, setUsername] = useState('');
@@ -72,12 +73,13 @@ export default function ClaimPage() {
       
       {/* Header */}
       <header className="flex justify-between items-center w-full px-8 py-6 border-b-2 border-text-inverse sticky top-0 z-40 bg-surface-base">
-        <div className="text-3xl tracking-tighter font-black uppercase">GHOST</div>
+        <Link href="/" className="text-3xl tracking-tighter font-black uppercase hover:opacity-80 transition-opacity">GHOST</Link>
         <div className="flex gap-6">
-          <button className="text-text-inverse active:scale-95 transition-transform">
-            <Wallet className="w-6 h-6" />
-          </button>
-          <button className="text-text-inverse active:scale-95 transition-transform">
+          <HeaderWallet />
+          <button 
+            onClick={() => router.push('/dashboard')}
+            className="text-text-inverse active:scale-95 transition-transform hover:text-text-tertiary"
+          >
             <Settings className="w-6 h-6" />
           </button>
         </div>
@@ -189,12 +191,18 @@ export default function ClaimPage() {
           <Wallet className="w-6 h-6" />
           <span className="text-[10px] font-bold uppercase mt-1">Wallet</span>
         </Link>
-        <button className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all px-4 py-2">
-          <ArrowRight className="w-6 h-6 rotate-45" />
+        <button 
+          onClick={() => router.push('/dashboard')}
+          className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all px-4 py-2"
+        >
+          <ArrowLeftRight className="w-6 h-6" />
           <span className="text-[10px] font-bold uppercase mt-1">Swap</span>
         </button>
-        <button className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all px-4 py-2">
-          <ArrowRight className="w-6 h-6 -rotate-45" />
+        <button 
+          onClick={() => router.push('/dashboard')}
+          className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all px-4 py-2"
+        >
+          <HistoryIcon className="w-6 h-6" />
           <span className="text-[10px] font-bold uppercase mt-1">History</span>
         </button>
         <div className="flex flex-col items-center justify-center bg-text-inverse text-surface-base rounded-full px-8 py-3 translate-y-0">

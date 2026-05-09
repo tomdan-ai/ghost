@@ -16,7 +16,7 @@ class GhostAPIClient {
 
   constructor(baseURL?: string) {
     this.client = axios.create({
-      baseURL: baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+      baseURL: baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4500',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -56,8 +56,8 @@ class GhostAPIClient {
 
   // Auth endpoints
 
-  async getNonce(walletAddress: string): Promise<{ nonce: string }> {
-    const response = await this.client.post<{ nonce: string }>(
+  async getNonce(walletAddress: string): Promise<{ nonce: string; message: string }> {
+    const response = await this.client.post<{ nonce: string; message: string }>(
       '/api/auth/nonce',
       { walletAddress }
     );
@@ -67,11 +67,23 @@ class GhostAPIClient {
   async verifySignature(
     walletAddress: string,
     signature: string,
-    message: string
+    message: string,
+    nonce?: string
   ): Promise<{ token: string; user: User }> {
+    const payload: {
+      walletAddress: string;
+      signature: string;
+      message: string;
+      nonce?: string;
+    } = { walletAddress, signature, message };
+
+    if (nonce) {
+      payload.nonce = nonce;
+    }
+
     const response = await this.client.post<{ token: string; user: User }>(
       '/api/auth/verify',
-      { walletAddress, signature, message }
+      payload
     );
     return response.data;
   }
@@ -85,14 +97,14 @@ class GhostAPIClient {
 
   async checkUsername(username: string): Promise<UsernameAvailability> {
     const response = await this.client.get<UsernameAvailability>(
-      `/api/users/check/${username}`
+      `/api/users/username/check/${username}`
     );
     return response.data;
   }
 
   async registerUsername(username: string): Promise<{ success: boolean; txSignature: string }> {
     const response = await this.client.post<{ success: boolean; txSignature: string }>(
-      '/api/users/register',
+      '/api/users/username/register',
       { username }
     );
     return response.data;
@@ -100,7 +112,7 @@ class GhostAPIClient {
 
   async resolveUsername(username: string): Promise<{ walletAddress: string }> {
     const response = await this.client.get<{ walletAddress: string }>(
-      `/api/users/resolve/${username}`
+      `/api/users/username/resolve/${username}`
     );
     return response.data;
   }
@@ -108,18 +120,18 @@ class GhostAPIClient {
   // Payment endpoints
 
   async createPayment(data: CreatePaymentRequest): Promise<PaymentRequest> {
-    const response = await this.client.post<{ payment: PaymentRequest }>(
+    const response = await this.client.post<PaymentRequest>(
       '/api/payments/create',
       data
     );
-    return response.data.payment;
+    return response.data;
   }
 
   async getPayment(id: string): Promise<PaymentRequest> {
-    const response = await this.client.get<{ payment: PaymentRequest }>(
+    const response = await this.client.get<PaymentRequest>(
       `/api/payments/${id}`
     );
-    return response.data.payment;
+    return response.data;
   }
 
   async getPaymentByUsername(username: string): Promise<PaymentRequest[]> {
@@ -130,10 +142,10 @@ class GhostAPIClient {
   }
 
   async getPaymentHistory(): Promise<PaymentRequest[]> {
-    const response = await this.client.get<{ payments: PaymentRequest[] }>(
+    const response = await this.client.get<{ data: PaymentRequest[] }>(
       `/api/payments/history`
     );
-    return response.data.payments;
+    return response.data.data;
   }
 
   async cancelPayment(id: string): Promise<{ success: boolean; txSignature: string }> {
@@ -144,11 +156,11 @@ class GhostAPIClient {
   }
 
   async syncPayment(id: string, username: string): Promise<PaymentRequest> {
-    const response = await this.client.post<{ payment: PaymentRequest }>(
+    const response = await this.client.post<PaymentRequest>(
       `/api/payments/${id}/sync`,
       { username }
     );
-    return response.data.payment;
+    return response.data;
   }
 
   async getAuditTrail(id: string): Promise<any[]> {
@@ -161,7 +173,7 @@ class GhostAPIClient {
   // LI.FI endpoints
 
   async getRouteQuote(params: RouteQuoteParams): Promise<RouteQuote> {
-    const response = await this.client.post<RouteQuote>('/api/payments/quote', params);
+    const response = await this.client.get<RouteQuote>('/api/payments/route', { params });
     return response.data;
   }
 

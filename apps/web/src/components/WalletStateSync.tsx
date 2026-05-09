@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletStore } from '@/stores/wallet-store';
 import { apiClient } from '@/lib/api-client';
@@ -17,8 +17,12 @@ export function WalletStateSync() {
     setHasRegistered,
     setToken,
     setUser,
-    disconnect: disconnectStore 
+    disconnect: disconnectStore,
+    token: storedToken
   } = useWalletStore();
+
+  const syncingRef = useRef(false);
+  const lastAuthedWalletRef = useRef<string | null>(null);
 
   const syncBalance = useCallback(async () => {
     if (!publicKey) return;
@@ -33,38 +37,51 @@ export function WalletStateSync() {
   const syncBackend = useCallback(async () => {
     if (!publicKey || !signMessage) return;
 
+    if (syncingRef.current) return;
+
     try {
+      syncingRef.current = true;
       const walletAddr = publicKey.toBase58();
+
+      if (lastAuthedWalletRef.current === walletAddr && storedToken) {
+        apiClient.setAuthToken(storedToken);
+        return;
+      }
       
       // 1. Get nonce
-      const { nonce } = await apiClient.getNonce(walletAddr);
+      const { message, nonce } = await apiClient.getNonce(walletAddr);
       
       // 2. Sign message
-      const message = new TextEncoder().encode(nonce);
-      const signature = await signMessage(message);
+      const messageBytes = new TextEncoder().encode(message);
+      const signature = await signMessage(messageBytes);
       const signatureBase58 = bs58.encode(signature);
       
       // 3. Verify and get token
-      const { token, user } = await apiClient.verifySignature(
+      const { token: authToken, user } = await apiClient.verifySignature(
         walletAddr,
         signatureBase58,
+        message,
         nonce
       );
       
       // 4. Set auth token in client
-      apiClient.setAuthToken(token);
+      apiClient.setAuthToken(authToken);
       
       // 5. Update store
-      setToken(token);
+      setToken(authToken);
       setUser(user);
       setUsername(user.username || null);
       setHasRegistered(!!user.username && !user.username.startsWith('user_'));
+
+      lastAuthedWalletRef.current = walletAddr;
       
     } catch (error) {
       console.error('Backend sync failed:', error);
       // Even if backend sync fails, we might still want to show wallet balance
+    } finally {
+      syncingRef.current = false;
     }
-  }, [publicKey, signMessage, setUsername, setHasRegistered]);
+  }, [publicKey, signMessage, setUsername, setHasRegistered, setToken, setUser, storedToken]);
 
   useEffect(() => {
     if (connected && publicKey) {

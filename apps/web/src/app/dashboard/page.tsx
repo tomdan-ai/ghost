@@ -2,23 +2,22 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import HeaderWallet from '@/components/HeaderWallet';
 import { 
-  Wallet, 
   Settings, 
-  ArrowDown, 
   Send, 
   ArrowLeftRight, 
   History, 
   User,
-  ShieldCheck,
-  Package,
   ArrowRight,
   Loader2,
   AlertCircle,
   CheckCircle,
   RefreshCcw,
   Copy,
-  Check
+  Check,
+  Wallet
 } from 'lucide-react';
 import { useWalletStore } from '@/stores/wallet-store';
 import { apiClient } from '@/lib/api-client';
@@ -26,8 +25,9 @@ import { PaymentStatus, type PaymentRequest } from '@ghost/shared-types';
 import { useWebSocket } from '@/components/WebSocketProvider';
 
 export default function DashboardPage() {
-  const { publicKey, balance, username, syncBalance } = useWalletStore();
+  const { publicKey, balance, username, syncBalance, token } = useWalletStore();
   const { socket } = useWebSocket();
+  const router = useRouter();
   const [history, setHistory] = useState<PaymentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,10 @@ export default function DashboardPage() {
   };
 
   const fetchHistory = useCallback(async () => {
-    if (!publicKey) return;
+    if (!publicKey || !token) {
+      setIsLoading(false);
+      return;
+    }
     try {
       // setIsLoading(true); // Don't show full loader on background refreshes
       const payments = await apiClient.getPaymentHistory();
@@ -54,7 +57,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey]);
+  }, [publicKey, token]);
 
   useEffect(() => {
     fetchHistory();
@@ -110,6 +113,7 @@ export default function DashboardPage() {
           <span className="text-xl tracking-tighter uppercase font-black">@{username || 'CLAIM HANDLE'}</span>
         </div>
         <div className="flex items-center gap-4">
+          <HeaderWallet />
           <button 
             onClick={() => {
               syncBalance();
@@ -134,7 +138,7 @@ export default function DashboardPage() {
           </div>
           
           {/* Hero Balance Card */}
-          <div className="mt-8 bg-text-inverse text-surface-base rounded-xl p-8 border-2 border-text-inverse relative overflow-hidden active:scale-[0.98] transition-transform duration-150 shadow-none">
+          <div className="mt-8 bg-[#000000] text-[#F5F5E8] rounded-xl p-8 border-2 border-[#000000] relative overflow-hidden active:scale-[0.98] transition-transform duration-150 shadow-none">
             <div className="flex flex-col gap-2 relative z-10">
               <span className="text-[11px] uppercase tracking-widest opacity-80 font-bold">Current Portfolio</span>
               <h1 className="text-5xl md:text-6xl tracking-tighter font-black leading-none">
@@ -156,7 +160,7 @@ export default function DashboardPage() {
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               {copied ? 'COPIED' : 'COPY LINK'}
             </button>
-            <Link href="/pay/tom" className="flex items-center justify-center gap-2 py-4 px-6 border-2 border-text-inverse rounded-full text-xs font-bold uppercase hover:bg-text-inverse hover:text-surface-base transition-all active:scale-95 text-center">
+            <Link href={username ? `/pay/${username}` : '/claim'} className="flex items-center justify-center gap-2 py-4 px-6 border-2 border-text-inverse rounded-full text-xs font-bold uppercase hover:bg-text-inverse hover:text-surface-base transition-all active:scale-95 text-center">
               <Send className="w-4 h-4" />
               SEND
             </Link>
@@ -164,7 +168,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Section Header */}
-        <div className="flex justify-between items-end mb-6">
+        <div id="activity-section" className="flex justify-between items-end mb-6">
           <h2 className="text-2xl uppercase tracking-tighter font-black">Recent Activity</h2>
           <span className="text-[11px] text-text-secondary uppercase tracking-widest font-bold cursor-pointer hover:text-text-inverse transition-colors">View All</span>
         </div>
@@ -220,15 +224,15 @@ export default function DashboardPage() {
         {/* Security Upsell Card */}
         {!username && (
           <div className="mt-12 group cursor-pointer">
-            <Link href="/claim" className="block p-6 border-2 border-text-inverse rounded-xl bg-surface-base relative overflow-hidden hover:bg-text-inverse hover:text-surface-base transition-all duration-300">
+            <Link href="/claim" className="block p-6 border-2 border-[#000000] rounded-xl bg-[#000000] text-[#F5F5E8] relative overflow-hidden hover:bg-[#F5F5E8] hover:text-[#000000] transition-all duration-300">
               <div className="flex justify-between items-start mb-12 relative z-10">
                 <div className="text-[11px] font-bold uppercase max-w-[150px] tracking-widest leading-relaxed">
                   CLAIM YOUR UNIQUE HANDLE NOW.
                 </div>
-                <ArrowRight className="text-text-inverse group-hover:text-surface-base group-hover:translate-x-2 transition-all" />
+                <ArrowRight className="group-hover:translate-x-2 transition-all" />
               </div>
               <div className="flex items-center gap-3 relative z-10">
-                <User className="w-10 h-10 text-text-tertiary group-hover:text-surface-base" />
+                <User className="w-10 h-10 text-text-tertiary" />
                 <h3 className="text-2xl uppercase tracking-tighter font-black leading-tight flex items-center gap-2">
                   No Identity <span className="opacity-60 group-hover:opacity-100 transition-opacity">Reserved</span>
                 </h3>
@@ -239,26 +243,26 @@ export default function DashboardPage() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 w-full h-24 flex justify-around items-center bg-surface-base border-t-2 border-text-inverse px-4 pb-8 z-50">
+      <nav className="fixed bottom-0 left-0 w-full h-24 flex justify-around items-center bg-[#F5F5E8] border-t-2 border-[#000000] px-4 pb-8 z-50">
         
-        <Link href="/dashboard" className="flex flex-col items-center justify-center bg-text-inverse text-surface-base rounded-full px-8 py-3 transition-transform active:scale-90">
+        <Link href="/dashboard" className="flex flex-col items-center justify-center bg-[#000000] text-[#F5F5E8] rounded-full px-8 py-3 transition-transform active:scale-90">
           <Wallet className="w-6 h-6" />
           <span className="text-[10px] font-bold uppercase mt-1">Wallet</span>
         </Link>
         
-        <button className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all active:scale-90 px-4 py-2 rounded-full group">
+        <button onClick={() => username ? router.push(`/pay/${username}`) : router.push('/claim')} className="flex flex-col items-center justify-center text-[#5f5e5e] hover:text-[#000000] transition-all active:scale-90 px-4 py-2 rounded-full group">
           <ArrowLeftRight className="w-6 h-6 group-hover:scale-110 transition-transform" />
-          <span className="text-[10px] font-bold uppercase mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Swap</span>
+          <span className="text-[10px] font-bold uppercase mt-1">Swap</span>
         </button>
         
-        <button className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all active:scale-90 px-4 py-2 rounded-full group">
+        <button onClick={() => document.getElementById('activity-section')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center justify-center text-[#5f5e5e] hover:text-[#000000] transition-all active:scale-90 px-4 py-2 rounded-full group">
           <History className="w-6 h-6 group-hover:scale-110 transition-transform" />
-          <span className="text-[10px] font-bold uppercase mt-1 opacity-0 group-hover:opacity-100 transition-opacity">History</span>
+          <span className="text-[10px] font-bold uppercase mt-1">History</span>
         </button>
 
-        <button className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all active:scale-90 px-4 py-2 rounded-full group">
+        <button onClick={() => username ? router.push(`/${username}`) : router.push('/claim')} className="flex flex-col items-center justify-center text-[#5f5e5e] hover:text-[#000000] transition-all active:scale-90 px-4 py-2 rounded-full group">
           <User className="w-6 h-6 group-hover:scale-110 transition-transform" />
-          <span className="text-[10px] font-bold uppercase mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Profile</span>
+          <span className="text-[10px] font-bold uppercase mt-1">Profile</span>
         </button>
       </nav>
     </div>

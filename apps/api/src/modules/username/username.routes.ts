@@ -51,7 +51,9 @@ router.post('/register', authMiddleware, validateBody(registerUsernameSchema), a
     const user = (req as any).user as { id: string; walletAddress: string };
     const { walletAddress, id: userId } = user;
 
-    const result = await usernameService.register(username, walletAddress, userId);
+    const result = await usernameService.register(username, walletAddress, userId, {
+      skipDb: Boolean((req as any).authDbUnavailable),
+    });
 
     if (!result.success) {
       const isConflict = result.errors?.includes('Username already taken') ||

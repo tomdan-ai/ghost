@@ -3,10 +3,11 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Layers, ShieldCheck, Lock, Loader2, AlertCircle, TrendingUp, Clock, Zap } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Loader2, AlertCircle, TrendingUp, Clock, Zap, Settings, X } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletStore } from '@/stores/wallet-store';
+import HeaderWallet from '@/components/HeaderWallet';
+import Link from 'next/link';
 import { RouteQuote } from '@ghost/shared-types';
 
 export default function PaymentPage() {
@@ -14,8 +15,6 @@ export default function PaymentPage() {
   const router = useRouter();
   const username = params.username as string;
   const { publicKey } = useWallet();
-  const { connected } = useWalletStore();
-  
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
@@ -63,22 +62,22 @@ export default function PaymentPage() {
           toToken: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC on Solana
           fromAmount: (parseFloat(amount) * 1e6).toString(), // USDC has 6 decimals
           fromAddress: publicKey.toBase58(), // Placeholder for bridge source
-          toAddress: resolvedAddress,
         });
         setQuote(quoteData);
       } catch (err) {
         console.error('Failed to fetch bridge quote:', err);
-        // Fallback to mock quote for demo if real API fails
+      // Fallback to mock quote for demo if real API fails
         setQuote({
-          id: 'mock-quote',
-          tool: 'GhostBridge',
-          estimate: {
-            fromAmount: amount,
-            toAmount: amount,
-            feeCosts: [{ amount: '0.04', symbol: 'USDC' }],
-            executionDuration: 30
-          }
-        } as any);
+          fromChain: '8453',
+          toChain: '115111108',
+          fromToken: { symbol: 'USDC' } as any,
+          toToken: { symbol: 'USDC' } as any,
+          fromAmount: amount,
+          toAmount: amount,
+          estimatedGas: '0.04',
+          estimatedTime: 30,
+          steps: []
+        });
       } finally {
         setIsQuoting(false);
       }
@@ -130,7 +129,26 @@ export default function PaymentPage() {
     : 'Resolving...';
 
   return (
-    <div className="min-h-screen bg-surface-base text-text-secondary font-sans overflow-x-hidden flex flex-col items-center pt-24 pb-32 px-4 md:px-8">
+    <div className="min-h-screen bg-surface-base text-text-secondary font-sans overflow-x-hidden flex flex-col items-center pt-8 pb-32 px-4 md:px-8">
+      
+      {/* Header */}
+      <header className="flex justify-between items-center w-full max-w-5xl px-4 py-8 mb-8">
+        <Link href="/" className="text-2xl font-black tracking-tighter uppercase leading-none hover:opacity-80 transition-opacity text-text-inverse">GHOST</Link>
+        <div className="flex items-center gap-4">
+          <HeaderWallet />
+          <button 
+            onClick={() => router.push('/dashboard')}
+            className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-text-inverse/20 hover:border-text-inverse active:scale-95 transition-all text-text-inverse/40 hover:text-text-inverse"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+          <Link href="/dashboard">
+            <button className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-text-inverse active:scale-95 transition-transform hover:bg-text-inverse hover:text-surface-base text-text-inverse">
+              <X className="w-5 h-5" />
+            </button>
+          </Link>
+        </div>
+      </header>
       
       {/* Editorial Headline */}
       <div className="w-full max-w-5xl mb-16">
@@ -187,7 +205,7 @@ export default function PaymentPage() {
             <div>
               <h3 className="text-[10px] uppercase tracking-[0.2em] mb-2 opacity-60 font-bold">Execution Engine</h3>
               <p className="text-2xl font-black tracking-tighter uppercase flex items-center gap-2">
-                {quote?.tool || 'Ghost Bridge'} <Zap className="w-4 h-4 fill-current" />
+                Ghost Bridge <Zap className="w-4 h-4 fill-current" />
               </p>
             </div>
             <div className="bg-[#D1F2E1] text-[#0A0A0A] text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-lg">
@@ -202,7 +220,7 @@ export default function PaymentPage() {
                   <Clock className="w-3 h-3" /> Time Estimate
                 </span>
                 <p className="text-lg font-black uppercase tracking-tighter">
-                  {isQuoting ? '...' : (quote?.estimate?.executionDuration ? `< ${Math.ceil(quote.estimate.executionDuration / 60)} MIN` : '< 30 SEC')}
+                  {isQuoting ? '...' : (quote?.estimatedTime ? `< ${Math.ceil(quote.estimatedTime / 60)} MIN` : '< 30 SEC')}
                 </p>
               </div>
               <div className="space-y-1">
@@ -210,7 +228,7 @@ export default function PaymentPage() {
                   <TrendingUp className="w-3 h-3" /> Protocol Fee
                 </span>
                 <p className="text-lg font-black uppercase tracking-tighter">
-                  {isQuoting ? '...' : (quote?.estimate?.feeCosts?.[0] ? `${quote.estimate.feeCosts[0].amount} ${quote.estimate.feeCosts[0].symbol}` : '$0.04 USDC')}
+                  {isQuoting ? '...' : (quote?.estimatedGas ? `$${quote.estimatedGas} USDC` : '$0.04 USDC')}
                 </p>
               </div>
             </div>

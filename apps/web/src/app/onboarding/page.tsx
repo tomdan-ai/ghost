@@ -1,22 +1,32 @@
 'use client';
 
 import React from 'react';
-import { Shield, Globe, HelpCircle } from 'lucide-react';
+import Link from 'next/link';
+import { Shield, Globe, HelpCircle, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import WalletConnect from '@/components/WalletConnect';
+import HeaderWallet from '@/components/HeaderWallet';
+import { useRouter } from 'next/navigation';
 
 export default function OnboardingPage() {
+  const router = useRouter();
   return (
     <div className="min-h-screen bg-surface-base text-text-inverse font-sans flex flex-col selection:bg-text-tertiary selection:text-surface-base overflow-hidden">
       
       {/* Header Area */}
       <div className="flex-none px-8 pt-16">
         <div className="flex justify-between items-start">
-          <h1 className="text-4xl md:text-5xl tracking-tighter uppercase font-black leading-none">
+          <Link href="/" className="text-4xl md:text-5xl tracking-tighter uppercase font-black leading-none">
             GHOST
-          </h1>
-          <div className="relative">
-            <span className="text-xs font-bold font-mono">+</span>
+          </Link>
+          <div className="flex gap-4">
+            <HeaderWallet />
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-text-inverse/20 hover:border-text-inverse active:scale-95 transition-all text-text-inverse/40 hover:text-text-inverse"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
@@ -64,10 +74,11 @@ export default function OnboardingPage() {
           <WalletConnect />
           
           <Button 
-            variant="outline" 
+            variant="outline"
+            onClick={() => router.push('/claim')}
             className="w-full h-20 bg-transparent border-2 border-text-inverse text-text-inverse rounded-full text-xs font-bold uppercase tracking-widest hover:bg-text-inverse hover:text-surface-base transition-all active:scale-95 shadow-none"
           >
-            CREATE NEW WALLET
+            CREATE USERNAME OR WALLET NAME
           </Button>
 
           <div className="pt-6 flex flex-col items-center gap-4">

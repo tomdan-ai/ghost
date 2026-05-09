@@ -24,7 +24,7 @@ export function SolanaWalletProvider({
   // Get network from env or default to mainnet
   const network =
     (process.env.NEXT_PUBLIC_SOLANA_NETWORK as WalletAdapterNetwork) ||
-    WalletAdapterNetwork.Mainnet;
+    WalletAdapterNetwork.Devnet;
 
   // Get RPC endpoint from env or use default
   const endpoint = useMemo(() => {

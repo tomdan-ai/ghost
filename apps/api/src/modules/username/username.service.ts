@@ -53,34 +53,48 @@ export class UsernameService {
     cached: boolean;
     validation?: { valid: boolean; errors: string[] };
   }> {
-    // Validate format first
-    const validation = this.validateUsername(username);
-    if (!validation.valid) {
-      return { available: false, cached: false, validation };
-    }
+    try {
+      // Validate format first
+      const validation = this.validateUsername(username);
+      if (!validation.valid) {
+        return { available: false, cached: false, validation };
+      }
 
-    // Check Redis cache
-    const cached = await cacheService.getCachedUsernameAvailability(username);
-    if (cached) {
-      return { available: cached.available, cached: true };
-    }
+      // Check Redis cache
+      const cached = await cacheService.getCachedUsernameAvailability(username);
+      if (cached) {
+        return { available: cached.available, cached: true };
+      }
 
-    // Check database
-    const existingInDb = await prisma.usernameRegistry.findUnique({
-      where: { username: username.toLowerCase() },
-    });
+      // Check database
+      try {
+        const existingInDb = await prisma.usernameRegistry.findUnique({
+          where: { username: username.toLowerCase() },
+        });
 
-    if (existingInDb) {
-      await cacheService.cacheUsernameAvailability(username, false);
+        if (existingInDb) {
+          await cacheService.cacheUsernameAvailability(username, false);
+          return { available: false, cached: false };
+        }
+      } catch (error) {
+        console.error('Username availability DB check failed, falling back to chain:', error);
+      }
+
+      try {
+        // Check blockchain (authoritative source)
+        const existsOnChain = await solanaService.checkUsernameOnChain(username);
+        const isAvailable = !existsOnChain;
+
+        await cacheService.cacheUsernameAvailability(username, isAvailable);
+        return { available: isAvailable, cached: false };
+      } catch (error) {
+        console.error('Username availability chain check failed:', error);
+        return { available: false, cached: false };
+      }
+    } catch (error) {
+      console.error('Username availability check failed:', error);
       return { available: false, cached: false };
     }
-
-    // Check blockchain (authoritative source)
-    const existsOnChain = await solanaService.checkUsernameOnChain(username);
-    const isAvailable = !existsOnChain;
-
-    await cacheService.cacheUsernameAvailability(username, isAvailable);
-    return { available: isAvailable, cached: false };
   }
 
   // ─── Registration ──────────────────────────────────────────────────────────
@@ -91,9 +105,12 @@ export class UsernameService {
   async register(
     username: string,
     walletAddress: string,
-    userId: string
+    userId: string,
+    options?: { skipDb?: boolean }
   ): Promise<{ success: boolean; registry?: any; errors?: string[] }> {
     try {
+      const skipDb = options?.skipDb === true;
+
       // Validate format
       const validation = this.validateUsername(username);
       if (!validation.valid) {
@@ -106,20 +123,22 @@ export class UsernameService {
         return { success: false, errors: ['Username already taken'] };
       }
 
-      // Verify user exists and owns the wallet
-      const user = await prisma.user.findUnique({
-        where: { id: userId, walletAddress },
-      });
-      if (!user) {
-        return { success: false, errors: ['User not found or wallet address mismatch'] };
-      }
+      if (!skipDb) {
+        // Verify user exists and owns the wallet
+        const user = await prisma.user.findUnique({
+          where: { id: userId, walletAddress },
+        });
+        if (!user) {
+          return { success: false, errors: ['User not found or wallet address mismatch'] };
+        }
 
-      // Check if user already has a username
-      const existingRegistry = await prisma.usernameRegistry.findUnique({
-        where: { walletAddress },
-      });
-      if (existingRegistry) {
-        return { success: false, errors: ['User already has a registered username'] };
+        // Check if user already has a username
+        const existingRegistry = await prisma.usernameRegistry.findUnique({
+          where: { walletAddress },
+        });
+        if (existingRegistry) {
+          return { success: false, errors: ['User already has a registered username'] };
+        }
       }
 
       // Register on blockchain first
@@ -128,6 +147,19 @@ export class UsernameService {
         username.toLowerCase(),
         userWallet
       );
+
+      if (skipDb) {
+        await cacheService.delete(`username:availability:${username.toLowerCase()}`);
+        return {
+          success: true,
+          registry: {
+            username: username.toLowerCase(),
+            walletAddress,
+            onChainAddress: registryPDA,
+            registrationTx: signature,
+          },
+        };
+      }
 
       // Persist to database
       const registry = await prisma.usernameRegistry.create({
@@ -182,18 +214,22 @@ export class UsernameService {
     }
 
     // Try database first
-    const registry = await prisma.usernameRegistry.findUnique({
-      where: { username: username.toLowerCase() },
-      include: {
-        user: {
-          select: { id: true, walletAddress: true, username: true, createdAt: true },
+    try {
+      const registry = await prisma.usernameRegistry.findUnique({
+        where: { username: username.toLowerCase() },
+        include: {
+          user: {
+            select: { id: true, walletAddress: true, username: true, createdAt: true },
+          },
         },
-      },
-    });
+      });
 
-    if (registry) {
-      await cacheService.set(cacheKey, registry, 10 * 60 * 1000);
-      return { found: true, data: registry, cached: false };
+      if (registry) {
+        await cacheService.set(cacheKey, registry, 10 * 60 * 1000);
+        return { found: true, data: registry, cached: false };
+      }
+    } catch (error) {
+      console.error('Username resolve DB lookup failed, falling back to chain:', error);
     }
 
     // Fallback to blockchain

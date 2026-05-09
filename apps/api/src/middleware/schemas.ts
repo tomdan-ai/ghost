@@ -59,11 +59,17 @@ export const nonceRequestSchema = z.object({
  * Schema for POST /auth/verify body.
  * Requirements 1.3, 10.1.
  */
-export const verifySignatureSchema = z.object({
-  walletAddress: walletAddressSchema,
-  signature: z.string().min(1, 'signature is required'),
-  nonce: z.string().min(1, 'nonce is required'),
-});
+export const verifySignatureSchema = z
+  .object({
+    walletAddress: walletAddressSchema,
+    signature: z.string().min(1, 'signature is required'),
+    nonce: z.string().min(1, 'nonce is required').optional(),
+    message: z.string().min(1, 'message is required').optional(),
+  })
+  .refine((data) => Boolean(data.nonce || data.message), {
+    message: 'nonce or message is required',
+    path: ['nonce'],
+  });
 
 // ─── Pagination / history schemas ─────────────────────────────────────────────
 

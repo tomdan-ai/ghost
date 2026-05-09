@@ -34,7 +34,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const socketUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4500';
     
     console.log('🔌 Connecting to WebSocket...', socketUrl);
     
