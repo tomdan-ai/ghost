@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Force Prisma to use library engine (library is standard for Node.js)
+process.env['PRISMA_CLIENT_ENGINE_TYPE'] = 'library';
+
 import express from 'express';
 import { createServer } from 'http';
 import { prisma, connectDatabase } from './config/database';
@@ -101,7 +104,7 @@ app.get('/health', async (_req, res) => {
   const body: Record<string, unknown> = {
     status: overallStatus,
     timestamp: new Date().toISOString(),
-    environment: config.nodeEnv,
+    environment: config.NODE_ENV,
     version: process.env['npm_package_version'] ?? '1.0.0',
     uptime: process.uptime(),
     services: {
@@ -217,7 +220,7 @@ async function startServer() {
 
     httpServer.listen(config.server.port, () => {
       console.log(`🚀 Ghost API running on port ${config.server.port}`);
-      console.log(`   Environment: ${config.nodeEnv}`);
+      console.log(`   Environment: ${config.NODE_ENV}`);
       console.log(`   CORS Origin: ${config.server.corsOrigin}`);
       console.log(`   Rate Limit: ${config.rateLimit.maxRequests} requests/minute`);
       console.log(`   Cache TTL: ${config.cache.routesTtlMs / 60000} minutes for routes`);

@@ -3,12 +3,10 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // Users table - stores user information
@@ -31,7 +29,7 @@ model UsernameRegistry {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   username        String   @unique
   walletAddress   String   @unique @map("wallet_address")
-  userId          String   @map("user_id") @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
   onChainAddress  String?  @map("on_chain_address")  // Solana PDA for the registry account
   registrationTx  String?  @map("registration_tx")   // Blockchain transaction signature
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz

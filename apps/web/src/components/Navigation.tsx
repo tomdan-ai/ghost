@@ -36,7 +36,7 @@ export function Navigation() {
           ) : (
             <div className="flex items-center gap-4">
               {username && (
-                <Link href={`/pay`} className="hidden sm:flex text-sm text-text-secondary hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)] font-bold">
+                <Link href="/dashboard" className="hidden sm:flex text-sm text-text-secondary hover:text-text-inverse focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--text-tertiary)] font-bold">
                   @{username}
                 </Link>
               )}
