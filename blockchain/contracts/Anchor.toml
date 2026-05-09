@@ -7,8 +7,11 @@ skip-lint = false
 [programs.localnet]
 ghost_registry = "5v95TCKx8XvdXKnGjFQUumdNwdAuM6prvcYx6YfZxBKH"
 
+[programs.devnet]
+ghost_registry = "5v95TCKx8XvdXKnGjFQUumdNwdAuM6prvcYx6YfZxBKH"
+
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

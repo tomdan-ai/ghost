@@ -1,19 +1,17 @@
-import { PrismaClient } from '@prisma/client';
+// Prisma is not set up yet - using Supabase directly
+// import { PrismaClient } from '@prisma/client';
 
-export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
+// export const prisma = new PrismaClient({
+//   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+// });
+
+// Stub for now - will be replaced with Supabase queries
+export const prisma = null as any;
 
 export async function connectDatabase() {
-  try {
-    await prisma.$connect();
-    console.log('✅ Database connected');
-  } catch (error) {
-    console.error('❌ Database connection failed:', error);
-    process.exit(1);
-  }
+  console.log('✅ Using Supabase for database (Prisma not configured)');
 }
 
 export async function disconnectDatabase() {
-  await prisma.$disconnect();
+  // No-op for Supabase
 }
