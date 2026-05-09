@@ -71,6 +71,19 @@ export class TransactionService {
   }
 
   /**
+   * Update the status of an existing transaction record (Requirement 5.7, 17.1).
+   *
+   * Used by the payment state machine to reflect the current processing stage
+   * of a transaction (e.g. PENDING → PROCESSING → COMPLETED / FAILED).
+   */
+  async updateTransactionStatus(transactionId: string, status: string) {
+    return prisma.transaction.update({
+      where: { id: transactionId },
+      data: { status },
+    });
+  }
+
+  /**
    * Retrieve all transaction records associated with a payment request
    * (Requirement 5.5, 5.7).
    *

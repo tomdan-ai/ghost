@@ -268,6 +268,69 @@ describe('TransactionService', () => {
     });
   });
 
+  // ─── updateTransactionStatus ──────────────────────────────────────────────
+
+  describe('updateTransactionStatus (Requirements 5.7, 17.1)', () => {
+    it('updates the status of a transaction record', async () => {
+      const updated = makeTransactionRecord({ status: PaymentStatus.PROCESSING });
+      mockUpdate.mockResolvedValue(updated);
+
+      const result = await service.updateTransactionStatus(TRANSACTION_ID, PaymentStatus.PROCESSING);
+
+      expect(result.status).toBe(PaymentStatus.PROCESSING);
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: { id: TRANSACTION_ID },
+        data: { status: PaymentStatus.PROCESSING },
+      });
+    });
+
+    it('can transition status to COMPLETED', async () => {
+      const updated = makeTransactionRecord({ status: PaymentStatus.COMPLETED });
+      mockUpdate.mockResolvedValue(updated);
+
+      const result = await service.updateTransactionStatus(TRANSACTION_ID, PaymentStatus.COMPLETED);
+
+      expect(result.status).toBe(PaymentStatus.COMPLETED);
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: { id: TRANSACTION_ID },
+        data: { status: PaymentStatus.COMPLETED },
+      });
+    });
+
+    it('can transition status to FAILED', async () => {
+      const updated = makeTransactionRecord({ status: PaymentStatus.FAILED });
+      mockUpdate.mockResolvedValue(updated);
+
+      const result = await service.updateTransactionStatus(TRANSACTION_ID, PaymentStatus.FAILED);
+
+      expect(result.status).toBe(PaymentStatus.FAILED);
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: { id: TRANSACTION_ID },
+        data: { status: PaymentStatus.FAILED },
+      });
+    });
+
+    it('returns the updated transaction record', async () => {
+      const updated = makeTransactionRecord({ status: PaymentStatus.PROCESSING });
+      mockUpdate.mockResolvedValue(updated);
+
+      const result = await service.updateTransactionStatus(TRANSACTION_ID, PaymentStatus.PROCESSING);
+
+      expect(result.id).toBe(TRANSACTION_ID);
+      expect(result.paymentRequestId).toBe(PAYMENT_REQUEST_ID);
+    });
+
+    it('only updates the status field, not other fields', async () => {
+      const updated = makeTransactionRecord({ status: PaymentStatus.PROCESSING });
+      mockUpdate.mockResolvedValue(updated);
+
+      await service.updateTransactionStatus(TRANSACTION_ID, PaymentStatus.PROCESSING);
+
+      const callArg = mockUpdate.mock.calls[0][0];
+      expect(Object.keys(callArg.data)).toEqual(['status']);
+    });
+  });
+
   // ─── getTransactionsByPayment ──────────────────────────────────────────────
 
   describe('getTransactionsByPayment (Requirements 5.5, 5.7)', () => {
