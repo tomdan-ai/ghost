@@ -4,39 +4,47 @@
  */
 
 // Mock dependencies before importing the service
+const mockFindUnique = jest.fn();
+const mockCreate = jest.fn();
+const mockUserFindUnique = jest.fn();
+const mockUserUpdate = jest.fn();
+const mockTransaction = jest.fn();
+
 jest.mock('../../../config/database', () => ({
   prisma: {
     usernameRegistry: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      delete: jest.fn(),
+      findUnique: (...args: unknown[]) => mockFindUnique(...args),
+      create: (...args: unknown[]) => mockCreate(...args),
     },
     user: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
+      update: (...args: unknown[]) => mockUserUpdate(...args),
     },
-    $transaction: jest.fn(),
+    $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
 }));
 
+const mockGetCachedAvailability = jest.fn();
+const mockCacheAvailability = jest.fn();
+const mockCacheGet = jest.fn();
+const mockCacheSet = jest.fn();
+const mockCacheDelete = jest.fn();
+const mockInvalidateUserProfile = jest.fn();
+const mockInvalidateUserCaches = jest.fn();
+
 jest.mock('../../../config/redis', () => ({
   cacheService: {
-    get: jest.fn().mockResolvedValue(null),
-    set: jest.fn().mockResolvedValue(undefined),
-    delete: jest.fn().mockResolvedValue(undefined),
-    getCachedUsernameAvailability: jest.fn().mockResolvedValue(null),
-    cacheUsernameAvailability: jest.fn().mockResolvedValue(undefined),
-    invalidateUserProfile: jest.fn().mockResolvedValue(undefined),
-    invalidateUserCaches: jest.fn().mockResolvedValue(undefined),
+    get: (...args: unknown[]) => mockCacheGet(...args),
+    set: (...args: unknown[]) => mockCacheSet(...args),
+    delete: (...args: unknown[]) => mockCacheDelete(...args),
+    getCachedUsernameAvailability: (...args: unknown[]) => mockGetCachedAvailability(...args),
+    cacheUsernameAvailability: (...args: unknown[]) => mockCacheAvailability(...args),
+    invalidateUserProfile: (...args: unknown[]) => mockInvalidateUserProfile(...args),
+    invalidateUserCaches: (...args: unknown[]) => mockInvalidateUserCaches(...args),
   },
 }));
 
 import { UsernameService } from '../username.service';
-import { prisma } from '../../../config/database';
-import { cacheService } from '../../../config/redis';
-
-const mockPrisma = prisma as jest.Mocked<typeof prisma>;
-const mockCache = cacheService as jest.Mocked<typeof cacheService>;
 
 describe('UsernameService', () => {
   let service: UsernameService;
@@ -44,6 +52,14 @@ describe('UsernameService', () => {
   beforeEach(() => {
     service = new UsernameService();
     jest.clearAllMocks();
+    // Default: no cache hits
+    mockGetCachedAvailability.mockResolvedValue(null);
+    mockCacheAvailability.mockResolvedValue(undefined);
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+    mockCacheDelete.mockResolvedValue(undefined);
+    mockInvalidateUserProfile.mockResolvedValue(undefined);
+    mockInvalidateUserCaches.mockResolvedValue(undefined);
   });
 
   // ─── validateUsername ────────────────────────────────────────────────────────
@@ -198,7 +214,7 @@ describe('UsernameService', () => {
     });
 
     it('returns available=true when username is not in database (Requirement 2.5)', async () => {
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue(null);
 
       const result = await service.checkAvailability('alice');
       expect(result.available).toBe(true);
@@ -206,7 +222,7 @@ describe('UsernameService', () => {
     });
 
     it('returns available=false when username exists in database (Requirement 2.3)', async () => {
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue({
+      mockFindUnique.mockResolvedValue({
         id: 'some-id',
         username: 'alice',
         walletAddress: '0x1234',
@@ -219,19 +235,17 @@ describe('UsernameService', () => {
     });
 
     it('checks availability using lowercase version of username (Requirement 2.8)', async () => {
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue(null);
 
-      // Even though "Alice" would fail format validation (uppercase), 
-      // a valid lowercase username should be checked in lowercase
       await service.checkAvailability('alice');
 
-      expect(mockPrisma.usernameRegistry.findUnique).toHaveBeenCalledWith({
+      expect(mockFindUnique).toHaveBeenCalledWith({
         where: { username: 'alice' },
       });
     });
 
     it('returns cached result when cache hit occurs', async () => {
-      (mockCache.getCachedUsernameAvailability as jest.Mock).mockResolvedValue({
+      mockGetCachedAvailability.mockResolvedValue({
         available: true,
         timestamp: Date.now(),
       });
@@ -240,15 +254,15 @@ describe('UsernameService', () => {
       expect(result.available).toBe(true);
       expect(result.cached).toBe(true);
       // Should not hit the database
-      expect(mockPrisma.usernameRegistry.findUnique).not.toHaveBeenCalled();
+      expect(mockFindUnique).not.toHaveBeenCalled();
     });
 
     it('caches the result after a database lookup', async () => {
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue(null);
 
       await service.checkAvailability('alice');
 
-      expect(mockCache.cacheUsernameAvailability).toHaveBeenCalledWith('alice', true);
+      expect(mockCacheAvailability).toHaveBeenCalledWith('alice', true);
     });
   });
 
@@ -267,8 +281,8 @@ describe('UsernameService', () => {
     });
 
     it('returns error when username is already taken (Requirement 2.3)', async () => {
-      // Username passes format validation
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue({
+      // availability check: username is taken
+      mockFindUnique.mockResolvedValueOnce({
         id: 'existing-id',
         username: validUsername,
         walletAddress: '0xother',
@@ -282,19 +296,18 @@ describe('UsernameService', () => {
     });
 
     it('stores username in lowercase (Requirement 2.8)', async () => {
-      // "alice" is already lowercase and valid
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock)
-        .mockResolvedValueOnce(null) // availability check
-        .mockResolvedValueOnce(null); // existing registry check
+      // availability check: not taken
+      mockFindUnique
+        .mockResolvedValueOnce(null)  // checkAvailability → usernameRegistry.findUnique
+        .mockResolvedValueOnce(null); // existing registry check → usernameRegistry.findUnique (by walletAddress)
 
-      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      mockUserFindUnique.mockResolvedValue({
         id: userId,
         walletAddress,
         username: null,
-        usernameRegistry: null,
       });
 
-      (mockPrisma.usernameRegistry.create as jest.Mock).mockResolvedValue({
+      mockCreate.mockResolvedValue({
         id: 'new-id',
         username: validUsername,
         walletAddress,
@@ -302,11 +315,11 @@ describe('UsernameService', () => {
         createdAt: new Date(),
       });
 
-      (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+      mockUserUpdate.mockResolvedValue({});
 
       await service.register(validUsername, walletAddress, userId);
 
-      expect(mockPrisma.usernameRegistry.create).toHaveBeenCalledWith(
+      expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             username: validUsername.toLowerCase(),
@@ -316,8 +329,8 @@ describe('UsernameService', () => {
     });
 
     it('returns error when user not found or wallet mismatch', async () => {
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue(null);
-      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue(null); // username available
+      mockUserFindUnique.mockResolvedValue(null); // user not found
 
       const result = await service.register(validUsername, walletAddress, userId);
       expect(result.success).toBe(false);
@@ -325,9 +338,10 @@ describe('UsernameService', () => {
     });
 
     it('returns error when user already has a registered username', async () => {
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock)
-        .mockResolvedValueOnce(null) // availability check (username not taken)
-        .mockResolvedValueOnce({     // existing registry for wallet
+      // availability check: username not taken
+      mockFindUnique
+        .mockResolvedValueOnce(null) // checkAvailability: username not taken
+        .mockResolvedValueOnce({     // existing registry for this wallet
           id: 'existing-id',
           username: 'oldname',
           walletAddress,
@@ -335,7 +349,7 @@ describe('UsernameService', () => {
           createdAt: new Date(),
         });
 
-      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      mockUserFindUnique.mockResolvedValue({
         id: userId,
         walletAddress,
         username: 'oldname',
@@ -347,11 +361,11 @@ describe('UsernameService', () => {
     });
 
     it('successfully registers a valid username (Requirement 2.2)', async () => {
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock)
+      mockFindUnique
         .mockResolvedValueOnce(null) // availability check
         .mockResolvedValueOnce(null); // existing registry check
 
-      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      mockUserFindUnique.mockResolvedValue({
         id: userId,
         walletAddress,
         username: null,
@@ -365,8 +379,8 @@ describe('UsernameService', () => {
         createdAt: new Date(),
       };
 
-      (mockPrisma.usernameRegistry.create as jest.Mock).mockResolvedValue(registryEntry);
-      (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+      mockCreate.mockResolvedValue(registryEntry);
+      mockUserUpdate.mockResolvedValue({});
 
       const result = await service.register(validUsername, walletAddress, userId);
       expect(result.success).toBe(true);
@@ -378,15 +392,15 @@ describe('UsernameService', () => {
 
   describe('resolve', () => {
     it('returns found=false when username does not exist (Requirement 2.7)', async () => {
-      (mockCache.get as jest.Mock).mockResolvedValue(null);
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue(null);
+      mockCacheGet.mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue(null);
 
       const result = await service.resolve('nonexistent');
       expect(result.found).toBe(false);
     });
 
     it('returns found=true with data when username exists (Requirement 2.6)', async () => {
-      (mockCache.get as jest.Mock).mockResolvedValue(null);
+      mockCacheGet.mockResolvedValue(null);
 
       const registryData = {
         id: 'reg-id',
@@ -402,7 +416,7 @@ describe('UsernameService', () => {
         },
       };
 
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue(registryData);
+      mockFindUnique.mockResolvedValue(registryData);
 
       const result = await service.resolve('alice');
       expect(result.found).toBe(true);
@@ -410,12 +424,12 @@ describe('UsernameService', () => {
     });
 
     it('resolves using lowercase username (Requirement 2.8)', async () => {
-      (mockCache.get as jest.Mock).mockResolvedValue(null);
-      (mockPrisma.usernameRegistry.findUnique as jest.Mock).mockResolvedValue(null);
+      mockCacheGet.mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue(null);
 
       await service.resolve('Alice');
 
-      expect(mockPrisma.usernameRegistry.findUnique).toHaveBeenCalledWith(
+      expect(mockFindUnique).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { username: 'alice' },
         })
@@ -424,12 +438,12 @@ describe('UsernameService', () => {
 
     it('returns cached result when available', async () => {
       const cachedData = { id: 'reg-id', username: 'alice', walletAddress: '0xabc' };
-      (mockCache.get as jest.Mock).mockResolvedValue(cachedData);
+      mockCacheGet.mockResolvedValue(cachedData);
 
       const result = await service.resolve('alice');
       expect(result.found).toBe(true);
       expect(result.cached).toBe(true);
-      expect(mockPrisma.usernameRegistry.findUnique).not.toHaveBeenCalled();
+      expect(mockFindUnique).not.toHaveBeenCalled();
     });
   });
 
