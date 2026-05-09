@@ -478,4 +478,312 @@ describe('UsernameService', () => {
       expect(unique.size).toBe(suggestions.length);
     });
   });
+
+  // ─── getByWallet ─────────────────────────────────────────────────────────────
+
+  describe('getByWallet', () => {
+    it('returns registry entry with user data for a known wallet address (Requirement 2.6)', async () => {
+      const registryEntry = {
+        id: 'reg-id',
+        username: 'alice',
+        walletAddress: '0xabc',
+        userId: 'user-id',
+        createdAt: new Date(),
+        user: {
+          id: 'user-id',
+          walletAddress: '0xabc',
+          username: 'alice',
+          createdAt: new Date(),
+        },
+      };
+      mockFindUnique.mockResolvedValue(registryEntry);
+
+      const result = await service.getByWallet('0xabc');
+
+      expect(result).toEqual(registryEntry);
+      expect(mockFindUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { walletAddress: '0xabc' },
+        })
+      );
+    });
+
+    it('returns null when no registry entry exists for the wallet', async () => {
+      mockFindUnique.mockResolvedValue(null);
+
+      const result = await service.getByWallet('0xunknown');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  // ─── updateUsername ───────────────────────────────────────────────────────────
+
+  describe('updateUsername', () => {
+    const userId = 'user-uuid-1234';
+    const walletAddress = '0x1234567890abcdef1234567890abcdef12345678';
+
+    it('returns error when user is not found', async () => {
+      mockUserFindUnique.mockResolvedValue(null);
+
+      const result = await service.updateUsername(userId, 'newname');
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain('User not found');
+    });
+
+    it('returns error when new username format is invalid', async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: userId,
+        walletAddress,
+        username: 'oldname',
+        usernameRegistry: null,
+      });
+
+      const result = await service.updateUsername(userId, 'BAD!');
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors!.length).toBeGreaterThan(0);
+    });
+
+    it('returns error when new username is already taken', async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: userId,
+        walletAddress,
+        username: 'oldname',
+        usernameRegistry: null,
+      });
+
+      // checkAvailability: username is taken
+      mockFindUnique.mockResolvedValue({
+        id: 'other-id',
+        username: 'newname',
+        walletAddress: '0xother',
+        userId: 'other-user',
+        createdAt: new Date(),
+      });
+
+      const result = await service.updateUsername(userId, 'newname');
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain('Username already taken');
+    });
+
+    it('successfully updates username via transaction (Requirement 2.2)', async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: userId,
+        walletAddress,
+        username: 'oldname',
+        usernameRegistry: { id: 'reg-id', username: 'oldname' },
+      });
+
+      // checkAvailability: new username is available
+      mockFindUnique.mockResolvedValue(null);
+
+      // Simulate transaction executing the callback
+      mockTransaction.mockImplementation(async (callback: Function) => {
+        const txMock = {
+          usernameRegistry: {
+            delete: jest.fn().mockResolvedValue({}),
+            create: jest.fn().mockResolvedValue({
+              id: 'new-reg-id',
+              username: 'newname',
+              walletAddress,
+              userId,
+              createdAt: new Date(),
+            }),
+          },
+          user: {
+            update: jest.fn().mockResolvedValue({}),
+          },
+        };
+        return callback(txMock);
+      });
+
+      const result = await service.updateUsername(userId, 'newname');
+
+      expect(result.success).toBe(true);
+      expect(mockInvalidateUserCaches).toHaveBeenCalledWith(walletAddress);
+    });
+
+    it('invalidates old and new username caches after update', async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: userId,
+        walletAddress,
+        username: 'oldname',
+        usernameRegistry: { id: 'reg-id', username: 'oldname' },
+      });
+
+      mockFindUnique.mockResolvedValue(null); // new username available
+
+      mockTransaction.mockImplementation(async (callback: Function) => {
+        const txMock = {
+          usernameRegistry: {
+            delete: jest.fn().mockResolvedValue({}),
+            create: jest.fn().mockResolvedValue({ id: 'new-reg-id' }),
+          },
+          user: { update: jest.fn().mockResolvedValue({}) },
+        };
+        return callback(txMock);
+      });
+
+      await service.updateUsername(userId, 'newname');
+
+      // Should invalidate availability caches for both old and new usernames
+      expect(mockCacheDelete).toHaveBeenCalledWith('username:availability:newname');
+      expect(mockCacheDelete).toHaveBeenCalledWith('username:availability:oldname');
+      expect(mockCacheDelete).toHaveBeenCalledWith('username:resolve:oldname');
+    });
+  });
+
+  // ─── searchUsernames ──────────────────────────────────────────────────────────
+
+  describe('searchUsernames', () => {
+    it('returns empty array for queries shorter than 2 characters', async () => {
+      const result = await service.searchUsernames('a');
+      expect(result).toEqual([]);
+      expect(mockFindMany).not.toHaveBeenCalled();
+    });
+
+    it('returns empty array for empty query', async () => {
+      const result = await service.searchUsernames('');
+      expect(result).toEqual([]);
+      expect(mockFindMany).not.toHaveBeenCalled();
+    });
+
+    it('queries database with lowercase search term', async () => {
+      const mockResults = [
+        { username: 'alice', walletAddress: '0xabc', createdAt: new Date(), user: null },
+      ];
+      mockFindMany.mockResolvedValue(mockResults);
+
+      const result = await service.searchUsernames('ali');
+
+      expect(result).toEqual(mockResults);
+      expect(mockFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            username: expect.objectContaining({ contains: 'ali' }),
+          }),
+        })
+      );
+    });
+
+    it('respects the limit parameter', async () => {
+      mockFindMany.mockResolvedValue([]);
+
+      await service.searchUsernames('ali', 5);
+
+      expect(mockFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 5 })
+      );
+    });
+
+    it('uses default limit of 10 when not specified', async () => {
+      mockFindMany.mockResolvedValue([]);
+
+      await service.searchUsernames('ali');
+
+      expect(mockFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10 })
+      );
+    });
+  });
+
+  // ─── getStats ─────────────────────────────────────────────────────────────────
+
+  describe('getStats', () => {
+    it('returns total count and recent count', async () => {
+      mockCount
+        .mockResolvedValueOnce(42)  // total
+        .mockResolvedValueOnce(5);  // recent (last 7 days)
+
+      const stats = await service.getStats();
+
+      expect(stats.total).toBe(42);
+      expect(stats.recent).toBe(5);
+      expect(stats.popularUsernames).toEqual([]);
+    });
+
+    it('queries recent count with a date filter for the last 7 days', async () => {
+      mockCount.mockResolvedValue(0);
+
+      await service.getStats();
+
+      // Second call to count should have a date filter
+      expect(mockCount).toHaveBeenCalledTimes(2);
+      const secondCallArgs = mockCount.mock.calls[1][0];
+      expect(secondCallArgs).toHaveProperty('where.createdAt.gte');
+    });
+  });
+
+  // ─── caching behavior (Requirement 18.2) ─────────────────────────────────────
+
+  describe('caching behavior', () => {
+    it('caches availability as false when username is taken (Requirement 18.2)', async () => {
+      mockFindUnique.mockResolvedValue({
+        id: 'existing-id',
+        username: 'alice',
+        walletAddress: '0x1234',
+        userId: 'user-id',
+        createdAt: new Date(),
+      });
+
+      await service.checkAvailability('alice');
+
+      expect(mockCacheAvailability).toHaveBeenCalledWith('alice', false);
+    });
+
+    it('does not hit the database when cache returns a result (Requirement 18.2)', async () => {
+      mockGetCachedAvailability.mockResolvedValue({
+        available: false,
+        timestamp: Date.now(),
+      });
+
+      const result = await service.checkAvailability('alice');
+
+      expect(result.cached).toBe(true);
+      expect(result.available).toBe(false);
+      expect(mockFindUnique).not.toHaveBeenCalled();
+    });
+
+    it('caches resolved username data for 10 minutes', async () => {
+      mockCacheGet.mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue({
+        id: 'reg-id',
+        username: 'alice',
+        walletAddress: '0xabc',
+        userId: 'user-id',
+        createdAt: new Date(),
+        user: { id: 'user-id', walletAddress: '0xabc', username: 'alice', createdAt: new Date() },
+      });
+
+      await service.resolve('alice');
+
+      expect(mockCacheSet).toHaveBeenCalledWith(
+        'username:resolve:alice',
+        expect.anything(),
+        10 * 60 * 1000
+      );
+    });
+
+    it('invalidates availability cache after successful registration', async () => {
+      const walletAddress = '0x1234567890abcdef1234567890abcdef12345678';
+      const userId = 'user-uuid-1234';
+
+      mockFindUnique
+        .mockResolvedValueOnce(null) // availability check
+        .mockResolvedValueOnce(null); // existing registry check
+
+      mockUserFindUnique.mockResolvedValue({ id: userId, walletAddress, username: null });
+      mockCreate.mockResolvedValue({ id: 'new-id', username: 'alice', walletAddress, userId, createdAt: new Date() });
+      mockUserUpdate.mockResolvedValue({});
+
+      await service.register('alice', walletAddress, userId);
+
+      expect(mockCacheDelete).toHaveBeenCalledWith('username:availability:alice');
+      expect(mockInvalidateUserProfile).toHaveBeenCalledWith(walletAddress);
+    });
+  });
 });

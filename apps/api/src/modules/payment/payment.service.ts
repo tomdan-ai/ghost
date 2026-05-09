@@ -260,10 +260,48 @@ export class PaymentService {
     });
   }
 
+  /**
+   * Retrieve a payment request by ID (no authorization check).
+   * Use getPaymentByIdAuthorized for user-facing endpoints.
+   */
   async getPaymentById(id: string) {
     return prisma.paymentRequest.findUnique({
       where: { id },
       include: { transactions: true },
     });
+  }
+
+  /**
+   * Retrieve a payment request by ID with authorization check.
+   * Only the sender or receiver of the payment may access it (Requirement 5.5).
+   *
+   * Returns:
+   *   - null if the payment does not exist
+   *   - { payment, authorized: false } if the requester is not the sender/receiver
+   *   - { payment, authorized: true } if access is permitted
+   */
+  async getPaymentByIdAuthorized(
+    id: string,
+    requesterWallet: string
+  ): Promise<{
+    payment: NonNullable<Awaited<ReturnType<typeof prisma.paymentRequest.findUnique>>> & {
+      transactions: any[];
+    };
+    authorized: boolean;
+  } | null> {
+    const payment = await prisma.paymentRequest.findUnique({
+      where: { id },
+      include: { transactions: true },
+    });
+
+    if (!payment) {
+      return null;
+    }
+
+    const authorized =
+      payment.senderWallet === requesterWallet ||
+      payment.receiverWallet === requesterWallet;
+
+    return { payment, authorized };
   }
 }
