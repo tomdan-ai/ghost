@@ -62,7 +62,6 @@ export class UsernameService {
     }
 
     // Check cache first
-    const cacheKey = `username:availability:${username.toLowerCase()}`;
     const cached = await cacheService.getCachedUsernameAvailability(username);
     
     if (cached) {
@@ -291,7 +290,7 @@ export class UsernameService {
       }
 
       // Start transaction
-      const result = await prisma.$transaction(async (tx: typeof prisma) => {
+      await prisma.$transaction(async (tx: typeof prisma) => {
         // Delete old registry entry if exists
         if (user.usernameRegistry) {
           await tx.usernameRegistry.delete({

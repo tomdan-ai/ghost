@@ -10,6 +10,7 @@ router.post('/create', authMiddleware, async (req, res) => {
     const { receiverWallet, amount, sourceChain, destinationChain } = req.body;
     const { walletAddress } = req.user;
 
+    // senderWallet is always taken from the authenticated JWT (Req 3.9)
     const payment = await paymentService.createPaymentRequest({
       senderWallet: walletAddress,
       receiverWallet,
@@ -18,9 +19,16 @@ router.post('/create', authMiddleware, async (req, res) => {
       destinationChain,
     });
 
-    res.json(payment);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create payment' });
+    res.status(201).json(payment);
+  } catch (error: any) {
+    if (error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: { errors: error.validationErrors },
+      });
+    }
+    res.status(500).json({ error: 'Failed to create payment', code: 'INTERNAL_ERROR' });
   }
 });
 

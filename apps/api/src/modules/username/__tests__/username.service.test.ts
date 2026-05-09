@@ -1,11 +1,14 @@
 /**
- * Unit tests for UsernameService - username validation and format checking
- * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9
+ * Unit tests for UsernameService - username registry database operations
+ * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 18.2
  */
 
 // Mock dependencies before importing the service
 const mockFindUnique = jest.fn();
 const mockCreate = jest.fn();
+const mockFindMany = jest.fn();
+const mockCount = jest.fn();
+const mockDelete = jest.fn();
 const mockUserFindUnique = jest.fn();
 const mockUserUpdate = jest.fn();
 const mockTransaction = jest.fn();
@@ -15,6 +18,9 @@ jest.mock('../../../config/database', () => ({
     usernameRegistry: {
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
       create: (...args: unknown[]) => mockCreate(...args),
+      findMany: (...args: unknown[]) => mockFindMany(...args),
+      count: (...args: unknown[]) => mockCount(...args),
+      delete: (...args: unknown[]) => mockDelete(...args),
     },
     user: {
       findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
