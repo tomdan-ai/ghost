@@ -3,6 +3,9 @@ import { prisma } from '../../config/database';
 import { cacheService } from '../../config/redis';
 import { SolanaUsernameService } from './solana.service';
 
+// Extract the transaction client type from Prisma's $transaction method
+type PrismaTransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 const solanaService = new SolanaUsernameService();
 
 export class UsernameService {
@@ -262,7 +265,7 @@ export class UsernameService {
         return { success: false, errors: ['Username already taken'] };
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: PrismaTransactionClient) => {
         if (user.usernameRegistry) {
           await tx.usernameRegistry.delete({
             where: { id: user.usernameRegistry.id },
