@@ -143,6 +143,21 @@ class GhostAPIClient {
     return response.data;
   }
 
+  async syncPayment(id: string, username: string): Promise<PaymentRequest> {
+    const response = await this.client.post<{ payment: PaymentRequest }>(
+      `/api/payments/${id}/sync`,
+      { username }
+    );
+    return response.data.payment;
+  }
+
+  async getAuditTrail(id: string): Promise<any[]> {
+    const response = await this.client.get<any[]>(
+      `/api/payments/${id}/audit`
+    );
+    return response.data;
+  }
+
   // LI.FI endpoints
 
   async getRouteQuote(params: RouteQuoteParams): Promise<RouteQuote> {

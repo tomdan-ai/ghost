@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   Wallet, 
@@ -15,36 +15,72 @@ import {
   ArrowRight,
   Loader2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  RefreshCcw,
+  Copy,
+  Check
 } from 'lucide-react';
 import { useWalletStore } from '@/stores/wallet-store';
 import { apiClient } from '@/lib/api-client';
 import { PaymentStatus, type PaymentRequest } from '@ghost/shared-types';
+import { useWebSocket } from '@/components/WebSocketProvider';
 
 export default function DashboardPage() {
   const { publicKey, balance, username, syncBalance } = useWalletStore();
+  const { socket } = useWebSocket();
   const [history, setHistory] = useState<PaymentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const payments = await apiClient.getPaymentHistory();
-        setHistory(payments);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch history:', err);
-        setError('Failed to load activity');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const copyLink = () => {
+    if (!username) return;
+    const link = `${window.location.origin}/pay/${username}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-    if (publicKey) {
-      fetchHistory();
+  const fetchHistory = useCallback(async () => {
+    if (!publicKey) return;
+    try {
+      // setIsLoading(true); // Don't show full loader on background refreshes
+      const payments = await apiClient.getPaymentHistory();
+      setHistory(payments);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch history:', err);
+      setError('Failed to load activity');
+    } finally {
+      setIsLoading(false);
     }
   }, [publicKey]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  // WebSocket Integration for Dashboard
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCreated = (payment: PaymentRequest) => {
+      console.log('✨ New Payment Created Notification:', payment);
+      fetchHistory(); // Refresh history list
+    };
+
+    const handleUpdate = () => {
+      fetchHistory(); // Refresh history on any status change
+    };
+
+    socket.on('payment:created', handleCreated);
+    socket.on('payment:update', handleUpdate);
+
+    return () => {
+      socket.off('payment:created', handleCreated);
+      socket.off('payment:update', handleUpdate);
+    };
+  }, [socket, fetchHistory]);
 
   const formatDistance = (date: Date | string) => {
     const d = new Date(date);
@@ -73,12 +109,18 @@ export default function DashboardPage() {
           </div>
           <span className="text-xl tracking-tighter uppercase font-black">@{username || 'CLAIM HANDLE'}</span>
         </div>
-        <div className="flex items-center gap-6">
-          <button onClick={() => syncBalance()} className="text-text-inverse hover:opacity-80 active:scale-95 transition-all">
-            <Wallet className="w-6 h-6" />
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => {
+              syncBalance();
+              fetchHistory();
+            }} 
+            className="text-text-inverse hover:opacity-80 active:scale-95 transition-all w-10 h-10 flex items-center justify-center border-2 border-text-inverse/10 rounded-full hover:border-text-inverse"
+          >
+            <RefreshCcw className="w-5 h-5" />
           </button>
-          <button className="text-text-inverse hover:opacity-80 active:scale-95 transition-all">
-            <Settings className="w-6 h-6" />
+          <button className="text-text-inverse hover:opacity-80 active:scale-95 transition-all w-10 h-10 flex items-center justify-center border-2 border-text-inverse/10 rounded-full hover:border-text-inverse">
+            <Settings className="w-5 h-5" />
           </button>
         </div>
       </header>
@@ -107,11 +149,14 @@ export default function DashboardPage() {
 
           {/* Action Buttons Grid */}
           <div className="grid grid-cols-2 gap-4 mt-6">
-            <button className="flex items-center justify-center gap-2 py-4 px-6 border-2 border-text-inverse rounded-full text-xs font-bold uppercase hover:bg-text-inverse hover:text-surface-base transition-all active:scale-95">
-              <ArrowDown className="w-4 h-4" />
-              RECEIVE
+            <button 
+              onClick={copyLink}
+              className="flex items-center justify-center gap-2 py-4 px-6 border-2 border-text-inverse rounded-full text-xs font-bold uppercase hover:bg-text-inverse hover:text-surface-base transition-all active:scale-95 text-center"
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'COPIED' : 'COPY LINK'}
             </button>
-            <Link href="/pay" className="flex items-center justify-center gap-2 py-4 px-6 border-2 border-text-inverse rounded-full text-xs font-bold uppercase hover:bg-text-inverse hover:text-surface-base transition-all active:scale-95 text-center">
+            <Link href="/pay/tom" className="flex items-center justify-center gap-2 py-4 px-6 border-2 border-text-inverse rounded-full text-xs font-bold uppercase hover:bg-text-inverse hover:text-surface-base transition-all active:scale-95 text-center">
               <Send className="w-4 h-4" />
               SEND
             </Link>
@@ -143,29 +188,31 @@ export default function DashboardPage() {
             </div>
           ) : (
             history.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-6 border-b border-text-inverse/20 group cursor-pointer hover:bg-text-inverse/5 transition-colors -mx-8 px-8">
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 flex items-center justify-center border-2 border-text-inverse rounded-full ${item.status === PaymentStatus.COMPLETED ? 'bg-[#D1F2E1]' : 'bg-[#F2F1D1]'}`}>
-                    {item.status === PaymentStatus.COMPLETED ? <CheckCircle className="w-6 h-6" /> : <ArrowLeftRight className="w-6 h-6" />}
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold uppercase leading-none mb-1">
-                      {item.receiverUsername ? `Pay to @${item.receiverUsername}` : 'Payment'}
+              <Link key={item.id} href={`/transaction/${item.id}`}>
+                <div className="flex items-center justify-between py-6 border-b border-text-inverse/20 group cursor-pointer hover:bg-text-inverse/5 transition-colors -mx-8 px-8">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 flex items-center justify-center border-2 border-text-inverse rounded-full ${item.status === PaymentStatus.COMPLETED ? 'bg-[#D1F2E1]' : 'bg-[#F2F1D1]'}`}>
+                      {item.status === PaymentStatus.COMPLETED ? <CheckCircle className="w-6 h-6" /> : <ArrowLeftRight className="w-6 h-6" />}
                     </div>
-                    <div className="flex gap-2">
-                      <span className="px-2 py-0.5 bg-[#E2E2E2] border border-text-inverse rounded-full text-[10px] font-bold uppercase">
-                        {item.status}
-                      </span>
+                    <div>
+                      <div className="text-[11px] font-bold uppercase leading-none mb-1">
+                        {item.receiverUsername ? `Pay to @${item.receiverUsername}` : 'Payment'}
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="px-2 py-0.5 bg-[#E2E2E2] border border-text-inverse rounded-full text-[10px] font-bold uppercase">
+                          {item.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-black leading-none mb-1">{item.amount} SOL</div>
+                    <div className="text-[10px] font-bold uppercase text-text-secondary opacity-60">
+                      {formatDistance(item.createdAt)}
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-black leading-none mb-1">{item.amount} SOL</div>
-                  <div className="text-[10px] font-bold uppercase text-text-secondary opacity-60">
-                    {formatDistance(item.createdAt)}
-                  </div>
-                </div>
-              </div>
+              </Link>
             ))
           )}
         </div>
@@ -203,7 +250,7 @@ export default function DashboardPage() {
           <ArrowLeftRight className="w-6 h-6 group-hover:scale-110 transition-transform" />
           <span className="text-[10px] font-bold uppercase mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Swap</span>
         </button>
-
+        
         <button className="flex flex-col items-center justify-center text-text-secondary hover:text-text-inverse transition-all active:scale-90 px-4 py-2 rounded-full group">
           <History className="w-6 h-6 group-hover:scale-110 transition-transform" />
           <span className="text-[10px] font-bold uppercase mt-1 opacity-0 group-hover:opacity-100 transition-opacity">History</span>

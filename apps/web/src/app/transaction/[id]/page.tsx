@@ -2,31 +2,37 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { X, Check, ExternalLink, Loader2, Link as LinkIcon, History } from 'lucide-react';
+import { X, Check, ExternalLink, Loader2, Link as LinkIcon, History, RefreshCcw, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { PaymentStatus, type PaymentRequest } from '@ghost/shared-types';
+import { useWebSocket } from '@/components/WebSocketProvider';
 
 export default function TransactionPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const { socket } = useWebSocket();
   
   const [payment, setPayment] = useState<PaymentRequest | null>(null);
+  const [auditTrail, setAuditTrail] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAudit, setShowAudit] = useState(false);
 
   const fetchPayment = useCallback(async () => {
     try {
       const data = await apiClient.getPayment(id);
       setPayment(data);
       
-      // If completed or failed, we can stop the fast polling
+      const auditData = await apiClient.getAuditTrail(id);
+      setAuditTrail(auditData);
+      
       return data.status === PaymentStatus.COMPLETED || data.status === PaymentStatus.FAILED;
     } catch (err) {
       console.error('Failed to fetch payment:', err);
-      // Don't set error on polling failure, just wait for next try
       if (isLoading) setError('Transaction not found');
       return false;
     } finally {
@@ -37,13 +43,49 @@ export default function TransactionPage() {
   useEffect(() => {
     fetchPayment();
     
-    const interval = setInterval(async () => {
-      const shouldStop = await fetchPayment();
-      if (shouldStop) clearInterval(interval);
-    }, 5000);
+    // Fallback polling every 30s in case WS fails
+    const interval = setInterval(fetchPayment, 30000);
 
     return () => clearInterval(interval);
   }, [fetchPayment]);
+
+  // WebSocket Integration
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    console.log('📡 Subscribing to payment room:', id);
+    socket.emit('subscribe:payment', id);
+
+    const handleUpdate = (updatedPayment: PaymentRequest) => {
+      console.log('🚀 WebSocket Update for Payment:', updatedPayment);
+      if (updatedPayment.id === id) {
+        setPayment(updatedPayment);
+        // Refresh audit trail too
+        apiClient.getAuditTrail(id).then(setAuditTrail).catch(console.error);
+      }
+    };
+
+    socket.on('payment:update', handleUpdate);
+
+    return () => {
+      socket.off('payment:update', handleUpdate);
+    };
+  }, [socket, id]);
+
+  const handleSync = async () => {
+    if (!payment) return;
+    try {
+      setIsSyncing(true);
+      const updated = await apiClient.syncPayment(id, payment.receiverUsername || '');
+      setPayment(updated);
+      const auditData = await apiClient.getAuditTrail(id);
+      setAuditTrail(auditData);
+    } catch (err) {
+      console.error('Manual sync failed:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -65,7 +107,7 @@ export default function TransactionPage() {
           <p className="text-sm opacity-60 uppercase font-bold tracking-widest">{error || 'Could not find details'}</p>
         </div>
         <Link href="/dashboard">
-          <Button className="bg-text-inverse text-surface-base rounded-full px-8 h-16 font-black uppercase tracking-widest hover:bg-text-tertiary">Return to Base</Button>
+          <Button className="bg-text-inverse text-surface-base rounded-full px-8 h-16 font-black uppercase tracking-widest hover:bg-text-tertiary border-none">Return to Base</Button>
         </Link>
       </div>
     );
@@ -80,12 +122,21 @@ export default function TransactionPage() {
       
       {/* Header */}
       <header className="flex justify-between items-center w-full px-8 py-8 mt-4">
-        <div className="text-2xl font-black tracking-tighter uppercase">GHOST</div>
-        <Link href="/dashboard">
-          <button className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-text-inverse active:scale-95 transition-transform hover:bg-text-inverse hover:text-surface-base">
-            <X className="w-5 h-5" />
+        <div className="text-2xl font-black tracking-tighter uppercase leading-none">GHOST</div>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={handleSync}
+            disabled={isSyncing || isCompleted}
+            className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-text-inverse/20 hover:border-text-inverse active:scale-95 transition-all text-text-inverse/40 hover:text-text-inverse disabled:opacity-20"
+          >
+            <RefreshCcw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
           </button>
-        </Link>
+          <Link href="/dashboard">
+            <button className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-text-inverse active:scale-95 transition-transform hover:bg-text-inverse hover:text-surface-base">
+              <X className="w-5 h-5" />
+            </button>
+          </Link>
+        </div>
       </header>
 
       <main className="px-8 pt-4 pb-32 max-w-lg mx-auto w-full">
@@ -93,14 +144,39 @@ export default function TransactionPage() {
         {/* Content Header */}
         <div className="relative mb-12">
           <span className="absolute -top-6 -left-4 text-text-inverse font-black text-2xl opacity-10">+</span>
-          <div className="text-[10px] font-black font-mono text-text-tertiary uppercase tracking-[0.3em] mb-4">
-            Status: {payment.status}
+          <div className="flex justify-between items-end mb-4">
+            <div className="text-[10px] font-black font-mono text-text-tertiary uppercase tracking-[0.3em]">
+              Status: {payment.status}
+            </div>
+            <button 
+              onClick={() => setShowAudit(!showAudit)}
+              className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity"
+            >
+              <Info className="w-3 h-3" />
+              {showAudit ? 'Hide Audit' : 'Audit Trail'}
+            </button>
           </div>
           <h1 className="text-5xl uppercase font-black tracking-tighter mb-4 leading-none">
-            SENT {payment.amount} <span className="opacity-40">SOL</span>
+            SENT {payment.amount} <span className="opacity-40">USDC</span>
           </h1>
           <p className="text-[10px] font-bold font-mono text-text-secondary uppercase tracking-[0.2em] break-all opacity-60">ID: {id}</p>
         </div>
+
+        {showAudit && (
+          <div className="mb-12 border-2 border-text-inverse/10 rounded-xl p-6 bg-text-inverse/5 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+            <h4 className="text-[10px] font-black uppercase tracking-widest mb-4">Event Log</h4>
+            <div className="space-y-4 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-text-inverse/20">
+              {auditTrail.map((log, i) => (
+                <div key={i} className="flex gap-4 text-[10px]">
+                  <span className="opacity-40 font-mono">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  <span className="font-bold uppercase tracking-wider">{log.action || log.status}</span>
+                  <span className="opacity-60 flex-grow text-right">{log.metadata?.message || ''}</span>
+                </div>
+              ))}
+              {auditTrail.length === 0 && <p className="text-[10px] opacity-40 uppercase italic">No logs available</p>}
+            </div>
+          </div>
+        )}
 
         <div className="h-[2px] bg-text-inverse w-full mb-12 opacity-10"></div>
 
@@ -191,7 +267,7 @@ export default function TransactionPage() {
             <div className="h-[1px] bg-surface-base/10 w-full"></div>
             <div className="flex justify-between items-center">
               <span className="text-[11px] font-bold uppercase tracking-widest opacity-60">Total Value</span>
-              <span className="text-4xl font-black tracking-tighter">{payment.amount} SOL</span>
+              <span className="text-4xl font-black tracking-tighter">{payment.amount} USDC</span>
             </div>
           </div>
         </div>

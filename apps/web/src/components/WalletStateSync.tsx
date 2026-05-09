@@ -15,6 +15,8 @@ export function WalletStateSync() {
     setBalance, 
     setUsername, 
     setHasRegistered,
+    setToken,
+    setUser,
     disconnect: disconnectStore 
   } = useWalletStore();
 
@@ -53,6 +55,8 @@ export function WalletStateSync() {
       apiClient.setAuthToken(token);
       
       // 5. Update store
+      setToken(token);
+      setUser(user);
       setUsername(user.username || null);
       setHasRegistered(!!user.username && !user.username.startsWith('user_'));
       
