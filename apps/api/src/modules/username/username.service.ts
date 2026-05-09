@@ -291,7 +291,7 @@ export class UsernameService {
       }
 
       // Start transaction
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx: typeof prisma) => {
         // Delete old registry entry if exists
         if (user.usernameRegistry) {
           await tx.usernameRegistry.delete({
@@ -391,7 +391,7 @@ export class UsernameService {
 
     // Note: In production, you'd have a separate table for username popularity
     // For now, return placeholder
-    const popularUsernames = [];
+    const popularUsernames: Array<{ username: string; count: number }> = [];
 
     return {
       total,
