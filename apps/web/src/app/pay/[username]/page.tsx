@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, ShieldCheck, Loader2, AlertCircle, TrendingUp, Clock, Zap, Settings, X } from 'lucide-react';
@@ -242,10 +243,20 @@ export default function PaymentPage() {
               </div>
               <div className="flex -space-x-2">
                 <div className="w-8 h-8 rounded-full border-2 border-text-inverse bg-white flex items-center justify-center overflow-hidden">
-                  <img src="https://bridge.base.org/icons/base.svg" alt="Base" className="w-5 h-5" />
+                  <Image
+                    src="https://bridge.base.org/icons/base.svg"
+                    alt="Base"
+                    width={20}
+                    height={20}
+                  />
                 </div>
                 <div className="w-8 h-8 rounded-full border-2 border-text-inverse bg-white flex items-center justify-center overflow-hidden">
-                  <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png" alt="Solana" className="w-5 h-5" />
+                  <Image
+                    src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png"
+                    alt="Solana"
+                    width={20}
+                    height={20}
+                  />
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
@@ -115,10 +116,26 @@ export default function Home() {
                 </section>
 
                 <div className="absolute top-[20%] right-[10%] w-48 h-48 pointer-events-none transform rotate-12 md:block hidden">
-                    <img alt="GHOST STICKERS" className="w-full h-full object-contain" src="/ghost_stickers.png"/>
+                    <div className="relative w-full h-full">
+                        <Image
+                            alt="GHOST STICKERS"
+                            className="object-contain"
+                            src="/ghost_stickers.png"
+                            fill
+                            sizes="(min-width: 768px) 192px, 0px"
+                        />
+                    </div>
                 </div>
                 <div className="absolute top-[60%] left-[5%] w-32 h-32 pointer-events-none transform -rotate-12 opacity-80 md:block hidden">
-                    <img alt="GHOST STICKERS" className="w-full h-full object-contain filter grayscale brightness-125" src="/ghost_stickers.png"/>
+                    <div className="relative w-full h-full">
+                        <Image
+                            alt="GHOST STICKERS"
+                            className="object-contain filter grayscale brightness-125"
+                            src="/ghost_stickers.png"
+                            fill
+                            sizes="(min-width: 768px) 128px, 0px"
+                        />
+                    </div>
                 </div>
 
                 <div id="how-it-works" className="w-full h-[1px] bg-[#000000] opacity-20 my-24 relative">
@@ -178,7 +195,7 @@ export default function Home() {
                     <button onClick={() => router.push('/')} className="font-headline-lg text-[48px] text-[#000000] font-black uppercase hover:opacity-80 transition-opacity text-left">GHOST</button>
                     <p className="font-mono-label uppercase text-[#5f5e5e]">© 2024 GHOST PROTOCOL. NE-EDITORIAL CRYPTO.</p>
                 </div>
-                <div className="flex gap-12 relative z-10 hidden sm:flex">
+                <div className="relative z-10 max-sm:hidden sm:flex gap-12">
                     <div className="flex flex-col gap-2">
                         <p className="font-label-sm text-[#000000]">RESOURCES</p>
                         <a className="font-mono-label text-[#5f5e5e] hover:text-[#000000] transition-colors" href="#">Whitepaper</a>

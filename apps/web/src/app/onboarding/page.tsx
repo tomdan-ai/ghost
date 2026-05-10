@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Shield, Globe, HelpCircle, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import WalletConnect from '@/components/WalletConnect';
@@ -50,10 +51,12 @@ export default function OnboardingPage() {
 
           {/* Visual Element */}
           <div className="w-full h-56 border-2 border-text-inverse rounded-xl overflow-hidden relative bg-text-inverse/5">
-            <img 
-              alt="Abstract encryption visualization" 
-              className="w-full h-full object-cover grayscale contrast-125 mix-blend-multiply opacity-80" 
+            <Image
+              alt="Abstract encryption visualization"
+              className="object-cover grayscale contrast-125 mix-blend-multiply opacity-80"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYMnP7F_t79rPx1_4jNER5eDfeEnwLXkFuqFhMRlx3wIcNz7yIqLo5k7_Jui4zWK3lL8hiSN8TijeIoQqAqkHpmYuMHgFeb2Z_BrGhVagPlwxSRcB0ftwur10GiKMiJROQROmcf09vRCeVftak8kyLbMsHcN_Vji1ADoT57hun1rQZcu6sPeIo6Mi11w-dJbEL2Xo7-yh5k5FKfE1NrOg5hgaRiAnDJntvDuvMOcuqmCU9Q5JboPAg6VqhBA7Dd_pOWhGoaNaMpk5x"
+              fill
+              sizes="(min-width: 768px) 448px, 100vw"
             />
             <div className="absolute top-4 right-4">
               <Shield className="text-text-tertiary w-8 h-8 fill-current" />

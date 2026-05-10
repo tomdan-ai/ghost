@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import HeaderWallet from '@/components/HeaderWallet';
 import { 
@@ -104,10 +105,12 @@ export default function DashboardPage() {
       <header className="flex justify-between items-center w-full px-8 py-6 bg-surface-base border-b-2 border-text-inverse sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full border-2 border-text-inverse bg-[#D1F2E1] flex items-center justify-center overflow-hidden">
-            <img 
-              alt="Ghost Avatar" 
-              className="w-full h-full object-cover" 
+            <Image
+              alt="Ghost Avatar"
+              className="w-full h-full object-cover"
               src={`https://api.dicebear.com/7.x/identicon/svg?seed=${username || 'ghost'}`}
+              width={40}
+              height={40}
             />
           </div>
           <span className="text-xl tracking-tighter uppercase font-black">@{username || 'CLAIM HANDLE'}</span>
