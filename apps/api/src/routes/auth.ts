@@ -5,7 +5,7 @@ import { logger } from '../config/logger';
 import { validateBody } from '../middleware/validation';
 import { nonceRequestSchema, verifySignatureSchema } from '../middleware/schemas';
 
-const router = Router();
+const router: Router = Router();
 const authService = new AuthService();
 
 // Generate nonce for wallet signature
@@ -24,7 +24,7 @@ router.post('/nonce', validateBody(nonceRequestSchema), async (req, res) => {
     });
 
     // Response format: { nonce, message, expiresIn, walletAddress } (Requirement 12.1)
-    res.json({
+    return res.json({
       nonce,
       message,
       expiresIn: '10 minutes',
@@ -39,7 +39,7 @@ router.post('/nonce', validateBody(nonceRequestSchema), async (req, res) => {
       error: error instanceof Error ? error.message : String(error),
     });
 
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to generate nonce',
       code: 'NONCE_GENERATION_FAILED',
       message: 'Unable to generate authentication nonce',
@@ -140,7 +140,7 @@ router.post('/verify', validateBody(verifySignatureSchema), async (req, res) => 
     });
 
     // Response format: { token, user, expiresIn } (Requirement 12.2)
-    res.json({
+    return res.json({
       token,
       user: {
         id: user.id,
@@ -170,7 +170,7 @@ router.post('/verify', validateBody(verifySignatureSchema), async (req, res) => 
       }
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Authentication failed',
       code: 'AUTHENTICATION_FAILED',
       message: 'Unable to complete authentication',
@@ -220,14 +220,14 @@ router.post('/validate', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       valid: true,
       user,
       expiresAt: decoded.exp,
     });
   } catch (error) {
     console.error('Token validation error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Token validation failed',
       code: 'TOKEN_VALIDATION_FAILED',
       message: 'Unable to validate token',
@@ -258,13 +258,13 @@ router.post('/refresh', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       token: newToken,
       expiresIn: '24 hours',
     });
   } catch (error) {
     console.error('Token refresh error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Token refresh failed',
       code: 'TOKEN_REFRESH_FAILED',
       message: 'Unable to refresh token',

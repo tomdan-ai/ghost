@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import usernameRouter from '../modules/username/username.routes';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * Mount the username module routes under /api/users/username.

@@ -1,4 +1,5 @@
 import { PaymentStatus } from '@ghost/shared-types';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/database';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,7 +34,9 @@ export class AuditService {
         fromStatus,
         toStatus,
         reason: reason ?? null,
-        metadata: metadata ?? null,
+        metadata: metadata
+          ? (metadata as Prisma.InputJsonObject)
+          : Prisma.JsonNull,
       },
     });
   }

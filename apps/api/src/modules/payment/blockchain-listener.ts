@@ -9,6 +9,7 @@ const paymentService = new PaymentService();
  */
 export class BlockchainListener {
   private isListening = false;
+  private listenerIds: number[] = [];
 
   /**
    * Start listening to blockchain events
@@ -24,22 +25,23 @@ export class BlockchainListener {
 
     try {
       // Listen to PaymentReferenceCreated events
-      ghostRegistryProgram.addEventListener('PaymentReferenceCreated', (event, slot) => {
+      const createdListenerId = await ghostRegistryProgram.addEventListener('PaymentReferenceCreated', (event, slot) => {
         console.log('📢 PaymentReferenceCreated event:', event);
         this.handlePaymentCreated(event);
       });
 
       // Listen to PaymentReferenceClaimed events
-      ghostRegistryProgram.addEventListener('PaymentReferenceClaimed', (event, slot) => {
+      const claimedListenerId = await ghostRegistryProgram.addEventListener('PaymentReferenceClaimed', (event, slot) => {
         console.log('📢 PaymentReferenceClaimed event:', event);
         this.handlePaymentClaimed(event);
       });
 
       // Listen to PaymentReferenceCancelled events
-      ghostRegistryProgram.addEventListener('PaymentReferenceCancelled', (event, slot) => {
+      const cancelledListenerId = await ghostRegistryProgram.addEventListener('PaymentReferenceCancelled', (event, slot) => {
         console.log('📢 PaymentReferenceCancelled event:', event);
         this.handlePaymentCancelled(event);
       });
+      this.listenerIds = [createdListenerId, claimedListenerId, cancelledListenerId];
 
       console.log('✅ Blockchain listener started successfully');
     } catch (error) {
@@ -51,15 +53,17 @@ export class BlockchainListener {
   /**
    * Stop listening to blockchain events
    */
-  stop() {
+  async stop() {
     if (!this.isListening) {
       return;
     }
 
-    // Remove all event listeners
-    ghostRegistryProgram.removeEventListener('PaymentReferenceCreated', () => {});
-    ghostRegistryProgram.removeEventListener('PaymentReferenceClaimed', () => {});
-    ghostRegistryProgram.removeEventListener('PaymentReferenceCancelled', () => {});
+    await Promise.all(
+      this.listenerIds.map((listenerId) =>
+        ghostRegistryProgram.removeEventListener(listenerId)
+      )
+    );
+    this.listenerIds = [];
 
     this.isListening = false;
     console.log('🛑 Blockchain listener stopped');

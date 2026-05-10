@@ -50,13 +50,23 @@ export class AuthService {
     createdAt: number;
   } | null> {
     if (nonce) {
-      const keyed = await cacheService.get(`nonce:${walletAddress}:${nonce}`);
+      const keyed = await cacheService.get<{
+        nonce: string;
+        walletAddress: string;
+        expiresAt: number;
+        createdAt: number;
+      }>(`nonce:${walletAddress}:${nonce}`);
       if (keyed) {
         return keyed;
       }
     }
 
-    return cacheService.get(`nonce:${walletAddress}`);
+    return cacheService.get<{
+      nonce: string;
+      walletAddress: string;
+      expiresAt: number;
+      createdAt: number;
+    }>(`nonce:${walletAddress}`);
   }
 
   // Verify signature and nonce

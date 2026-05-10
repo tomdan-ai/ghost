@@ -22,7 +22,9 @@ export class AppError extends Error {
     this.name = 'AppError';
     this.code = code;
     this.statusCode = statusCode;
-    this.details = details;
+    if (details !== undefined) {
+      this.details = details;
+    }
 
     // Maintain proper prototype chain in transpiled ES5
     Object.setPrototypeOf(this, AppError.prototype);

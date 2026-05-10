@@ -4,7 +4,7 @@ import { authenticate as authMiddleware } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validation';
 import { registerUsernameSchema } from '../../middleware/schemas';
 
-const router = Router();
+const router: Router = Router();
 const usernameService = new UsernameService();
 
 /**

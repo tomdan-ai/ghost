@@ -134,7 +134,7 @@ export const config = getConfig();
 // Log environment validation success (only in development)
 if (config.isDevelopment) {
   console.log('✅ Environment validation successful');
-  console.log(`   NODE_ENV: ${config.nodeEnv}`);
+  console.log(`   NODE_ENV: ${config.server.nodeEnv}`);
   console.log(`   Server running on port: ${config.server.port}`);
   console.log(`   CORS Origin: ${config.server.corsOrigin}`);
 }

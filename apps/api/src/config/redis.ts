@@ -115,9 +115,11 @@ export class CacheService {
 
     try {
       const ttl = ttlMs ? Math.ceil(ttlMs / 1000) : undefined;
-      await this.client.set(key, JSON.stringify(value), {
-        EX: ttl,
-      });
+      if (ttl !== undefined) {
+        await this.client.set(key, JSON.stringify(value), { EX: ttl });
+      } else {
+        await this.client.set(key, JSON.stringify(value));
+      }
     } catch (error) {
       console.warn('⚠️ Cache set failed:', error);
     }
@@ -300,13 +302,14 @@ export class RateLimitService {
 
       if (count >= max) {
         // Get oldest entry to calculate retry time
-        const oldest = await this.client.zRange(key, 0, 0, { WITHSCORES: true });
-        const retryAfter = Math.ceil((oldest[1] as number + windowMs - now) / 1000);
+        const oldest = await this.client.zRangeWithScores(key, 0, 0);
+        const oldestScore = oldest[0]?.score ?? now;
+        const retryAfter = Math.ceil((oldestScore + windowMs - now) / 1000);
 
         return {
           allowed: false,
           remaining: 0,
-          reset: oldest[1] as number + windowMs,
+          reset: oldestScore + windowMs,
           retryAfter,
         };
       }

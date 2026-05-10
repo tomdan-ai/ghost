@@ -79,10 +79,10 @@ export const authenticate = async (
     (req as any).user = user;
     (req as any).token = token;
 
-    next();
+    return next();
   } catch (error) {
     console.error('Authentication middleware error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Authentication failed',
       code: 'AUTHENTICATION_FAILED',
       message: 'Unable to authenticate request',
@@ -146,10 +146,10 @@ export const authorize = (requiredRole: string) => {
       // TODO: Implement role-based authorization when roles are added
       // For now, all authenticated users are authorized
       
-      next();
+      return next();
     } catch (error) {
       console.error('Authorization middleware error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         error: 'Authorization failed',
         code: 'AUTHORIZATION_FAILED',
         message: 'Unable to authorize request',
@@ -192,10 +192,10 @@ export const checkOwnership = (resourceParam: string = 'userId') => {
         });
       }
 
-      next();
+      return next();
     } catch (error) {
       console.error('Ownership check middleware error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         error: 'Ownership check failed',
         code: 'OWNERSHIP_CHECK_FAILED',
         message: 'Unable to verify resource ownership',

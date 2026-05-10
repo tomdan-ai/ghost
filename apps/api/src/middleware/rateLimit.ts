@@ -73,11 +73,11 @@ export const rateLimitMiddleware = async (
     // Successful request — reset violation counter.
     violationCounts.delete(ip);
 
-    next();
+    return next();
   } catch (error) {
     console.error('Rate limiting middleware error:', error);
     // Allow request if rate limiting fails to avoid blocking legitimate traffic.
-    next();
+    return next();
   }
 };
 
@@ -114,10 +114,10 @@ export const authRateLimitMiddleware = async (
       });
     }
 
-    next();
+    return next();
   } catch (error) {
     console.error('Auth rate limiting middleware error:', error);
-    next();
+    return next();
   }
 };
 

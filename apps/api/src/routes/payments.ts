@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import paymentModuleRouter from '../modules/payment/payment.routes';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * Mount the payment module routes.

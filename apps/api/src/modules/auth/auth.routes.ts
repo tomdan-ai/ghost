@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AuthService } from './auth.service';
 import { prisma } from '../../config/database';
 
-const router = Router();
+const router: Router = Router();
 const authService = new AuthService();
 
 router.post('/nonce', async (req, res) => {
@@ -15,9 +15,9 @@ router.post('/nonce', async (req, res) => {
 
     const nonce = authService.generateNonce(walletAddress);
     
-    res.json({ nonce });
+    return res.json({ nonce });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to generate nonce' });
+    return res.status(500).json({ error: 'Failed to generate nonce' });
   }
 });
 
@@ -53,9 +53,9 @@ router.post('/verify', async (req, res) => {
 
     const token = authService.generateToken(walletAddress, user.username);
 
-    res.json({ token, user });
+    return res.json({ token, user });
   } catch (error) {
-    res.status(500).json({ error: 'Authentication failed' });
+    return res.status(500).json({ error: 'Authentication failed' });
   }
 });
 

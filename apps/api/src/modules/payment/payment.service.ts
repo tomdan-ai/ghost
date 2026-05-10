@@ -251,9 +251,14 @@ export class PaymentService {
     status: PaymentStatus,
     txHash?: string
   ) {
+    const data: { status: PaymentStatus; txHash?: string } = { status };
+    if (txHash !== undefined) {
+      data.txHash = txHash;
+    }
+
     return prisma.paymentRequest.update({
       where: { id: paymentId },
-      data: { status, txHash },
+      data,
     });
   }
 

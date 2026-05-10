@@ -7,7 +7,7 @@ import { validateBody, validateQuery } from '../../middleware/validation';
 import { createPaymentSchema, paginationSchema } from '../../middleware/schemas';
 import { ZodSchema } from 'zod';
 
-const router = Router();
+const router: Router = Router();
 const paymentService = new PaymentService();
 const paymentHistoryService = new PaymentHistoryService();
 const auditService = new AuditService();

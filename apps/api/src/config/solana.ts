@@ -3,6 +3,50 @@ import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
 import idl from '../ghost_registry.json';
 import bs58 from 'bs58';
 
+type AnchorNumber = {
+  toNumber(): number;
+};
+
+export type UsernameRegistryAccount = {
+  username: string;
+  wallet: PublicKey;
+  createdAt: AnchorNumber;
+};
+
+export type PaymentReferenceAccount = {
+  id: string;
+  sender: PublicKey;
+  receiver: PublicKey;
+  amount: AnchorNumber;
+  sourceChain: string;
+  status: unknown;
+  createdAt: AnchorNumber;
+};
+
+type AccountClient<TAccount> = {
+  fetch(publicKey: PublicKey): Promise<TAccount>;
+  all(filters?: unknown[]): Promise<Array<{ publicKey: PublicKey; account: TAccount }>>;
+};
+
+type MethodBuilder = {
+  accounts(accounts: Record<string, unknown>): { rpc(): Promise<string> };
+};
+
+export type GhostRegistryProgram = Program & {
+  methods: {
+    registerUsername(username: string): MethodBuilder;
+    updateWallet(): MethodBuilder;
+    closeUsername(): MethodBuilder;
+    createPaymentReference(paymentId: string, amount: number, sourceChain: string): MethodBuilder;
+    claimPaymentReference(paymentId: string): MethodBuilder;
+    cancelPaymentReference(paymentId: string): MethodBuilder;
+  };
+  account: {
+    usernameRegistry: AccountClient<UsernameRegistryAccount>;
+    paymentReference: AccountClient<PaymentReferenceAccount>;
+  };
+};
+
 // Program ID from your deployed contract
 export const GHOST_REGISTRY_PROGRAM_ID = new PublicKey(
   '5v95TCKx8XvdXKnGjFQUumdNwdAuM6prvcYx6YfZxBKH'
@@ -12,13 +56,13 @@ export const GHOST_REGISTRY_PROGRAM_ID = new PublicKey(
 let connectionInstance: Connection | null = null;
 let payerKeypair: Keypair | null = null;
 let providerInstance: AnchorProvider | null = null;
-let programInstance: Program | null = null;
+let programInstance: GhostRegistryProgram | null = null;
 
 // Solana connection (lazy-loaded)
 export const getConnection = () => {
   if (!connectionInstance) {
     connectionInstance = new Connection(
-      process.env.SOLANA_RPC_URL || 'http://localhost:8899',
+      process.env['SOLANA_RPC_URL'] || 'http://localhost:8899',
       'confirmed'
     );
   }
@@ -29,7 +73,7 @@ export const getConnection = () => {
 export const getPayer = () => {
   if (!payerKeypair) {
     try {
-      const privateKey = process.env.SOLANA_PAYER_PRIVATE_KEY;
+      const privateKey = process.env['SOLANA_PAYER_PRIVATE_KEY'];
       if (!privateKey) {
         throw new Error('SOLANA_PAYER_PRIVATE_KEY not set');
       }
@@ -62,7 +106,7 @@ export const getGhostRegistryProgram = () => {
       idl as any,
       GHOST_REGISTRY_PROGRAM_ID,
       getProvider()
-    );
+    ) as GhostRegistryProgram;
   }
   return programInstance;
 };
@@ -86,7 +130,7 @@ export const provider = new Proxy({} as AnchorProvider, {
   }
 });
 
-export const ghostRegistryProgram = new Proxy({} as Program, {
+export const ghostRegistryProgram = new Proxy({} as GhostRegistryProgram, {
   get: (target, prop) => {
     return (getGhostRegistryProgram() as any)[prop];
   }

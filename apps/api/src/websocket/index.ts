@@ -31,7 +31,7 @@ async function authenticateSocket(
   next: (err?: Error) => void
 ): Promise<void> {
   try {
-    const token: string | undefined = socket.handshake.auth?.token;
+    const token = socket.handshake.auth?.['token'] as string | undefined;
 
     if (!token) {
       return next(
