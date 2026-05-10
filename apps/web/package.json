@@ -4,12 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm --filter @ghost/shared-types build && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "type-check": "tsc --noEmit"
+  },
+  "engines": {
+    "node": "20.x",
+    "pnpm": "8.15.0"
   },
   "dependencies": {
     "@ghost/shared-types": "workspace:*",
